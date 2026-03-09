@@ -7,17 +7,23 @@ import StaffMembers from './pages/StaffMembers';
 
 function App() {
   const [page, setPage] = useState('login');
+  const [userRole, setUserRole] = useState(null); // 'admin' | 'superadmin'
+
+  const handleLoginSuccess = (role = 'admin') => {
+    setUserRole(role);
+    setPage('dashboard');
+  };
 
   const renderPage = () => {
     switch (page) {
       case 'dashboard':
-        return <Dashboard onNavigate={(p) => setPage(p)} />;
+        return <Dashboard userRole={userRole} onNavigate={(p) => setPage(p)} />;
       case 'coupons':
-        return <Coupons onNavigate={(p) => setPage(p)} />;
+        return <Coupons userRole={userRole} onNavigate={(p) => setPage(p)} />;
       case 'staff':
-        return <StaffMembers onNavigate={(p) => setPage(p)} />;
+        return <StaffMembers userRole={userRole} onNavigate={(p) => setPage(p)} />;
       default:
-        return <Login onLoginSuccess={() => setPage('dashboard')} />;
+        return <Login onLoginSuccess={handleLoginSuccess} />;
     }
   };
 

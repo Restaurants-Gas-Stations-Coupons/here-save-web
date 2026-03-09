@@ -22,6 +22,152 @@ export const sidebarData = {
     ],
 };
 
+export const superadminSidebarData = {
+    logo: { text: 'Here&\nSave', color: '#DC0004' },
+    stationLabel: null, // Hide for superadmin
+    stationAddress: null, // Hide for superadmin
+    navItems: [
+        {
+            id: 'dashboard',
+            label: 'Petrol Stations',
+            icon: 'Fuel',
+            path: '/dashboard',
+            subItems: [
+                { id: 0, label: 'Location 01' },
+                { id: 1, label: 'Location 02' },
+                { id: 2, label: 'Location 03' },
+            ]
+        },
+        {
+            id: 'restaurants',
+            label: 'Resturents',
+            icon: 'Utensils',
+            path: '/restaurants',
+            subItems: [
+                { id: 0, label: 'Location 01' },
+                { id: 1, label: 'Location 02' },
+                { id: 2, label: 'Location 03' },
+            ]
+        },
+        { id: 'coupons', label: 'Coupons', icon: 'Ticket', path: '/coupons' },
+        { id: 'staff', label: 'Staff members', icon: 'Users', path: '/staff' },
+    ],
+};
+
+export const superadminRestaurants = [
+    {
+        id: 1,
+        stationData: {
+            name: 'Godred Italian Restaurant',
+            icon: 'utensils',
+            address: '603AB Road, Kondapur, Hyderabad-500032, Telangana, India',
+            status: 'Active',
+            outletId: 'P102402',
+            manager: 'Ravi Kumar',
+            contact: '+91 0254 457 624',
+        },
+        statsData: [
+            { id: 'coupons_active', label: 'Coupons Active', value: '26', badge: { text: 'Active', type: 'active' } },
+            { id: 'redemptions', label: 'Redemptions', value: '526', badge: { text: '6.8%', type: 'down' } },
+            { id: 'discounts', label: 'Discounts', value: '3,865', badge: { text: '6.8%', type: 'up' } },
+            { id: 'total_sale', label: 'Total Sale', value: '4,60,859', badge: { text: '6.8%', type: 'up' } },
+        ]
+    },
+    {
+        id: 2,
+        stationData: {
+            name: 'Paradise Biryani',
+            icon: 'utensils',
+            address: 'Jubilee Hills Road No. 36, Hyderabad-500033, Telangana, India',
+            status: 'Active',
+            outletId: 'I582311',
+            manager: 'Suresh Verma',
+            contact: '+91 9876 543 210',
+        },
+        statsData: [
+            { id: 'coupons_active', label: 'Coupons Active', value: '45', badge: { text: 'Active', type: 'active' } },
+            { id: 'redemptions', label: 'Redemptions', value: '782', badge: { text: '5.2%', type: 'up' } },
+            { id: 'discounts', label: 'Discounts', value: '5,210', badge: { text: '2.1%', type: 'up' } },
+            { id: 'total_sale', label: 'Total Sale', value: '6,20,100', badge: { text: '4.5%', type: 'up' } },
+        ]
+    },
+    {
+        id: 3,
+        stationData: {
+            name: 'Bawarchi Authentic',
+            icon: 'utensils',
+            address: 'Gachibowli ORR Point, Hyderabad-500081, Telangana, India',
+            status: 'Active',
+            outletId: 'H982442',
+            manager: 'Anil Reddy',
+            contact: '+91 8888 777 666',
+        },
+        statsData: [
+            { id: 'coupons_active', label: 'Coupons Active', value: '18', badge: { text: 'Active', type: 'active' } },
+            { id: 'redemptions', label: 'Redemptions', value: '310', badge: { text: '1.2%', type: 'down' } },
+            { id: 'discounts', label: 'Discounts', value: '2,105', badge: { text: '0.8%', type: 'down' } },
+            { id: 'total_sale', label: 'Total Sale', value: '2,90,550', badge: { text: '3.1%', type: 'up' } },
+        ]
+    }
+];
+
+export const superadminStations = [
+    {
+        id: 1,
+        stationData: {
+            name: 'Bharat Petroleum Fuel Station',
+            icon: 'fuel',
+            address: '603AB Road, Kondapur, Hyderabad-500032, Telangana, India',
+            status: 'Active',
+            outletId: 'P102402',
+            manager: 'Ravi Kumar',
+            contact: '+91 0254 457 624',
+        },
+        statsData: [
+            { id: 'coupons_active', label: 'Coupons Active', value: '26', badge: { text: 'Active', type: 'active' } },
+            { id: 'redemptions', label: 'Redemptions', value: '526', badge: { text: '6.8%', type: 'down' } },
+            { id: 'discounts', label: 'Discounts', value: '3,865', badge: { text: '6.8%', type: 'up' } },
+            { id: 'total_sale', label: 'Total Sale', value: '4,60,859', badge: { text: '6.8%', type: 'up' } },
+        ]
+    },
+    {
+        id: 2,
+        stationData: {
+            name: 'Indian Oil Premium Pump',
+            icon: 'fuel',
+            address: 'Jubilee Hills Road No. 36, Hyderabad-500033, Telangana, India',
+            status: 'Active',
+            outletId: 'I582311',
+            manager: 'Suresh Verma',
+            contact: '+91 9876 543 210',
+        },
+        statsData: [
+            { id: 'coupons_active', label: 'Coupons Active', value: '45', badge: { text: 'Active', type: 'active' } },
+            { id: 'redemptions', label: 'Redemptions', value: '782', badge: { text: '5.2%', type: 'up' } },
+            { id: 'discounts', label: 'Discounts', value: '5,210', badge: { text: '2.1%', type: 'up' } },
+            { id: 'total_sale', label: 'Total Sale', value: '6,20,100', badge: { text: '4.5%', type: 'up' } },
+        ]
+    },
+    {
+        id: 3,
+        stationData: {
+            name: 'Hindustan Petroleum Dealer',
+            icon: 'fuel',
+            address: 'Gachibowli ORR Point, Hyderabad-500081, Telangana, India',
+            status: 'Active',
+            outletId: 'H982442',
+            manager: 'Anil Reddy',
+            contact: '+91 8888 777 666',
+        },
+        statsData: [
+            { id: 'coupons_active', label: 'Coupons Active', value: '18', badge: { text: 'Active', type: 'active' } },
+            { id: 'redemptions', label: 'Redemptions', value: '310', badge: { text: '1.2%', type: 'down' } },
+            { id: 'discounts', label: 'Discounts', value: '2,105', badge: { text: '0.8%', type: 'down' } },
+            { id: 'total_sale', label: 'Total Sale', value: '2,90,550', badge: { text: '3.1%', type: 'up' } },
+        ]
+    }
+];
+
 export const statsData = [
     {
         id: 'coupons_active',

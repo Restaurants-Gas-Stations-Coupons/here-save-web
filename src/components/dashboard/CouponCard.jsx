@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CheckCircle2, Clock, XCircle } from 'lucide-react';
 
 /**
@@ -10,12 +10,17 @@ const CouponCard = ({
     onEdit,
     onDelete,
     onCancel,
+    onApprove,
+    onReApprove,
     scale = 1.25,
     variant = 'simplified',
     status = 'Approved', // 'Approved' | 'Pending' | 'Rejected'
     isSelected = false,
+    role = 'admin',
     onClick
 }) => {
+    const [isHovered, setIsHovered] = useState(false);
+
     const W = 156;
     const H = 211;
     const notchPct = (156 / H) * 100;
@@ -26,7 +31,11 @@ const CouponCard = ({
     const isDetailed = variant === 'detailed';
 
     return (
-        <div className="shrink-0 flex flex-col items-center">
+        <div
+            className="shrink-0 flex flex-col items-center"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
             <div
                 className="relative group cursor-pointer transition-transform active:scale-[0.98]"
                 style={{ width: w, height: h }}
@@ -107,7 +116,7 @@ const CouponCard = ({
             </div>
 
             {/* Actions (Floating style matching reference) */}
-            {isDetailed && isSelected && (
+            {isDetailed && (isHovered || isSelected) && (
                 <div className="relative z-10 flex items-center gap-2 mt-6 px-1 w-full max-w-[175px] animate-in fade-in slide-in-from-top-2 duration-200">
                     <button
                         onClick={(e) => {
@@ -139,6 +148,22 @@ const CouponCard = ({
                             Delete
                         </button>
                     )}
+                </div>
+            )}
+
+            {/* Superadmin Default Actions (When NOT hovered/selected) */}
+            {isDetailed && !(isHovered || isSelected) && role === 'superadmin' && (status === 'Pending' || status === 'Rejected') && (
+                <div className="relative z-10 flex items-center gap-2 mt-6 px-1 w-full max-w-[175px] animate-in fade-in slide-in-from-top-2 duration-200">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (status === 'Pending' && onApprove) onApprove();
+                            if (status === 'Rejected' && onReApprove) onReApprove();
+                        }}
+                        className="flex-1 py-3 px-1 bg-[#DC0004] hover:bg-[#DC0004]/95 text-white text-[13px] font-bold rounded-[14px] shadow-md shadow-[#DC0004]/25 transition-all active:scale-95 uppercase"
+                    >
+                        {status === 'Pending' ? 'Approve' : 'Re-Approve'}
+                    </button>
                 </div>
             )}
         </div>

@@ -1,138 +1,97 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Button from './Button';
+import OTPInput from './OTPInput';
 
-const OTPModal = ({ isOpen, onClose, onVerify, onResend, phoneNumber, countryCode, verifyError }) => {
+const OTPModal = ({
+    isOpen,
+    onClose,
+    onVerify,
+    onResend,
+    phoneNumber,
+    countryCode,
+    verifyError,
+    otpLength = 6 // Default to 6 for Firebase support
+}) => {
     const { t } = useTranslation();
-    const [otp, setOtp] = useState(['', '', '', '', '', '']);
-    const inputRefs = useRef([]);
+    const [otp, setOtp] = useState(Array(otpLength).fill(''));
 
     useEffect(() => {
         if (isOpen) {
-            setOtp(['', '', '', '', '', '']);
-            setTimeout(() => {
-                if (inputRefs.current[0]) {
-                    inputRefs.current[0].focus();
-                }
-            }, 100);
+            setOtp(Array(otpLength).fill(''));
         }
-    }, [isOpen]);
+    }, [isOpen, otpLength]);
 
     if (!isOpen) return null;
 
-    const handleChange = (index, e) => {
-        const value = e.target.value;
-        if (isNaN(value)) return;
-
-        const newOtp = [...otp];
-        newOtp[index] = value.substring(value.length - 1);
-        setOtp(newOtp);
-
-        if (value && index < 5 && inputRefs.current[index + 1]) {
-            inputRefs.current[index + 1].focus();
-        }
-    };
-
-    const handleKeyDown = (index, e) => {
-        if (e.key === 'Backspace' && !otp[index] && index > 0 && inputRefs.current[index - 1]) {
-            inputRefs.current[index - 1].focus();
-        }
-    };
-
-    const handlePaste = (e) => {
-        e.preventDefault();
-        const pastedData = e.clipboardData.getData('text/plain').trim();
-        const pastedNumbers = pastedData.replace(/\D/g, '').slice(0, 6).split('');
-
-        if (pastedNumbers.length > 0) {
-            const newOtp = [...otp];
-            pastedNumbers.forEach((num, i) => {
-                if (i < 6) newOtp[i] = num;
-            });
-            setOtp(newOtp);
-
-            const nextIndex = Math.min(pastedNumbers.length, 5);
-            if (inputRefs.current[nextIndex]) {
-                inputRefs.current[nextIndex].focus();
-            }
-        }
-    };
-
     const handleVerify = () => {
         const fullOtp = otp.join('');
-        if (fullOtp.length === 6) {
+        if (fullOtp.length === otpLength) {
             onVerify(fullOtp);
         }
     };
 
-    // Format phone number like +1 XXX XXX X789
-    const formattedPhone = `${countryCode} ${phoneNumber.substring(0, 3)} ${phoneNumber.substring(3, 6)} X${phoneNumber.substring(7)}`;
+    // Format phone number like +91 XXX XXX X111 (matching Image 1's +1 XXX XXX X789)
+    const formattedPhone = `${countryCode} XXX XXX X${phoneNumber.slice(-3)}`;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
             {/* Blurred background backdrop */}
             <div
-                className="absolute inset-0 bg-white/30 backdrop-blur-md transition-opacity"
+                className="absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity"
                 onClick={onClose}
             />
 
             {/* Modal Content */}
-            <div className="relative bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-8 w-full max-w-[400px] z-10 flex flex-col items-center animate-in fade-in zoom-in duration-200">
-                <h3 className="text-[24px] font-semibold text-dark mb-2 text-center">
+            <div className="relative bg-white rounded-[32px] shadow-[0_1px_10px_rgba(0,0,0,0.1)] py-10 px-6 sm:px-8 w-full max-w-[401px] z-10 flex flex-col items-center animate-in zoom-in duration-300 font-onest">
+
+                <h3 className="text-[24px] font-bold text-[#2E2E2E] mb-2 text-center tracking-tight">
                     {t('login.otp_title', 'Enter verification code')}
                 </h3>
-                <p className="text-grayCustom text-sm text-center mb-8">
+
+                <p className="text-[#939393] text-[16px] text-center mb-10 leading-relaxed font-normal">
                     {t('login.otp_subtitle', "We've sent a code to")} {formattedPhone}
                 </p>
 
                 {/* OTP Inputs */}
-                <div className="flex justify-center gap-3 mb-8">
-                    {otp.map((digit, idx) => (
-                        <input
-                            key={idx}
-                            ref={(el) => (inputRefs.current[idx] = el)}
-                            type="text"
-                            inputMode="numeric"
-                            value={digit}
-                            onChange={(e) => handleChange(idx, e)}
-                            onKeyDown={(e) => handleKeyDown(idx, e)}
-                            onPaste={handlePaste}
-                            className="w-12 h-14 sm:w-14 h-14 text-center text-2xl font-medium text-dark bg-white border border-gray-200 rounded-[12px] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all shadow-sm"
-                            maxLength={1}
-                        />
-                    ))}
-                </div>
+                <OTPInput
+                    length={otpLength}
+                    value={otp}
+                    onChange={setOtp}
+                    onEnter={handleVerify}
+                    className="mb-10"
+                />
 
                 {verifyError && (
-                    <p className="text-sm text-red-500 text-center mb-2">{verifyError}</p>
+                    <p className="text-sm text-[#E11D48] text-center mb-4 font-medium">{verifyError}</p>
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex w-full gap-4 mb-6">
+                <div className="flex w-full gap-4 mb-8">
                     <Button
                         variant="secondary"
                         onClick={onClose}
-                        className="flex-1 h-12 text-sm"
+                        className="flex-1 h-[48px] !rounded-[16px] bg-[#F4F4F4] text-[#2E2E2E] font-bold text-[16px] border-none hover:bg-[#E5E5E5] transition-colors"
                     >
                         {t('login.otp_cancel', 'Cancel')}
                     </Button>
                     <Button
                         variant="primary"
                         onClick={handleVerify}
-                        className="flex-1 h-12 text-sm"
-                        disabled={otp.join('').length < 6}
+                        className="flex-1 h-[48px] !rounded-[16px] bg-[#DC0004] text-white font-bold text-[16px] border-none hover:opacity-95 transition-all active:scale-[0.98] disabled:opacity-50 disabled:scale-100"
+                        disabled={otp.join('').length < otpLength}
                     >
                         {t('login.otp_verify', 'Verify')}
                     </Button>
                 </div>
 
                 {/* Resend Code */}
-                <p className="text-sm">
-                    <span className="text-grayCustom">{t('login.otp_didnt_receive', "Didn't receive code?")} </span>
+                <p className="text-[16px] text-[#939393]">
+                    {t('login.otp_didnt_receive', "Didn't receive code?")}{' '}
                     <button
                         type="button"
                         onClick={() => onResend && onResend()}
-                        className="text-dark font-medium hover:text-primary transition-colors"
+                        className="text-[#2E2E2E] font-bold hover:underline transition-all"
                     >
                         {t('login.otp_resend', 'Resend code')}
                     </button>
@@ -143,3 +102,4 @@ const OTPModal = ({ isOpen, onClose, onVerify, onResend, phoneNumber, countryCod
 };
 
 export default OTPModal;
+

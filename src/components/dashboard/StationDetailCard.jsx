@@ -1,4 +1,5 @@
 import React from 'react';
+import { Edit, Utensils } from 'lucide-react';
 
 const StatusBadge = ({ status }) => {
     const isActive = status === 'Active';
@@ -13,15 +14,39 @@ const StatusBadge = ({ status }) => {
     );
 };
 
-const StationDetailCard = ({ data }) => {
+const StationDetailCard = ({ data, role, onEdit, entityType = 'station' }) => {
+    const isRestaurant = entityType === 'restaurant';
+    const entityName = isRestaurant ? 'Restaurant' : 'Station';
+
     return (
         <div className="bg-white rounded-[16px] px-6 py-5">
-            {/* Header label */}
-            <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-[#F3F7FA] flex items-center justify-center">
-                    <img src="/images/oil.svg" alt="station" className="w-[18px] h-[18px]" />
+            {/* Header label & Actions */}
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-[#F3F7FA] flex items-center justify-center">
+                        {isRestaurant ? <Utensils className="w-[18px] h-[18px] text-grayCustom" strokeWidth={1.5} /> : <img src="/images/oil.svg" alt="station" className="w-[18px] h-[18px]" />}
+                    </div>
+                    <span className="text-[13px] font-semibold text-dark">{entityName} Details</span>
                 </div>
-                <span className="text-[13px] font-medium text-dark">Station Details</span>
+
+                {/* Superadmin Actions */}
+                {role === 'superadmin' && (
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={onEdit}
+                            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-[12px] text-[13px] font-semibold text-dark hover:bg-gray-50 transition-all"
+                        >
+                            <Edit size={14} />
+                            Edit
+                        </button>
+                        <button
+                            className="flex items-center gap-2 px-4 py-2 border border-[#FFDADA] bg-white rounded-[12px] text-[13px] font-semibold text-[#DC0004] hover:bg-[#FFF5F5] transition-all"
+                        >
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#DC0004]" />
+                            Deactivate {entityName}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Title + badge */}

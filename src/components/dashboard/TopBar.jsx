@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Search, Bell } from 'lucide-react';
 import ProfilePopover from './ProfilePopover';
 import NotificationPopover from './NotificationPopover';
 
-const TopBar = ({ title }) => {
+const TopBar = ({ title, role, onAddStation }) => {
     const [showProfile, setShowProfile] = useState(false);
     const [showNotif, setShowNotif] = useState(false);
 
@@ -32,15 +32,23 @@ const TopBar = ({ title }) => {
         <header className="h-[72px] flex items-center px-10 gap-4 shrink-0 bg-[#F3F7FA] relative z-40">
             {/* Back / fwd */}
             <div className="flex items-center gap-1">
-                <button className="p-1.5 hover:bg-white rounded-lg text-[#BBBBBB] transition-all">
+                <button
+                    onClick={() => window.history.length > 1 ? window.history.back() : null}
+                    className="p-1.5 hover:bg-white rounded-lg text-[#BBBBBB] hover:text-dark transition-all"
+                    aria-label="Go back"
+                >
                     <ChevronLeft size={20} />
                 </button>
-                <button className="p-1.5 hover:bg-white rounded-lg text-dark transition-all">
+                <button
+                    onClick={() => window.history.forward()}
+                    className="p-1.5 hover:bg-white rounded-lg text-dark transition-all"
+                    aria-label="Go forward"
+                >
                     <ChevronRight size={20} />
                 </button>
             </div>
 
-            <h1 className="text-[17px] font-bold text-dark ml-2">{title}</h1>
+            <h1 className="text-[15px] font-semibold text-dark ml-4">{title}</h1>
 
             {/* Spacer */}
             <div className="flex-1" />
