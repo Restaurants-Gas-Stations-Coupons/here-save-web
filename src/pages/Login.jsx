@@ -8,6 +8,7 @@ import { auth } from '../firebase';
 import AuthLayout from '../layouts/AuthLayout';
 import LoginForm from '../components/features/auth/LoginForm';
 import OTPModal from '../components/ui/OTPModal';
+import { loginWithPhone, fetchCurrentUser } from '../services/authService';
 
 const Login = ({ onLoginSuccess }) => {
   const { t, i18n } = useTranslation();
@@ -56,13 +57,6 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   const handleLoginSubmit = async (data) => {
-    // Hardcoded bypass for Superadmin test number (10 digits)
-    if (data.phoneNumber === '2222222222') {
-      setAuthData(data);
-      setIsOtpOpen(true);
-      return;
-    }
-
     if (data.phoneNumber.length !== 10) {
       setSendOtpError('Please enter a valid 10-digit phone number');
       return;
@@ -79,21 +73,13 @@ const Login = ({ onLoginSuccess }) => {
 
   const handleVerifyOtp = async (otp) => {
     setVerifyError('');
-
-    // Superadmin bypass
-    if (authData.phoneNumber === '2222222222' && otp === '000000') {
-      setIsOtpOpen(false);
-      if (onLoginSuccess) onLoginSuccess('superadmin');
-      return;
-    }
-
     const conf = confirmationResultRef.current;
     if (!conf) {
       setVerifyError('Session expired. Please request a new code.');
       return;
     }
     try {
-      await conf.confirm(otp);
+      const userCredential = await conf.confirm(otp);
       confirmationResultRef.current = null;
       if (recaptchaVerifierRef.current) {
         try {
@@ -101,8 +87,30 @@ const Login = ({ onLoginSuccess }) => {
         } catch (_) { }
         recaptchaVerifierRef.current = null;
       }
-      setIsOtpOpen(false);
-      if (onLoginSuccess) onLoginSuccess('admin');
+      const firebaseIdToken = await userCredential.user.getIdToken();
+
+      try {
+        const { accessToken, refreshToken } = await loginWithPhone(firebaseIdToken);
+
+        // Persist tokens for subsequent API calls
+        if (accessToken) {
+          window.localStorage.setItem('accessToken', accessToken);
+        }
+        if (refreshToken) {
+          window.localStorage.setItem('refreshToken', refreshToken);
+        }
+
+        // Fetch current user to determine role
+        const user = await fetchCurrentUser(accessToken);
+        const backendRole = user?.role;
+        const mappedRole = backendRole === 'SUPER_ADMIN' ? 'superadmin' : 'admin';
+
+        setIsOtpOpen(false);
+        if (onLoginSuccess) onLoginSuccess(mappedRole);
+      } catch (apiError) {
+        const message = apiError?.message || 'Login failed. Please try again.';
+        setVerifyError(message);
+      }
     } catch (err) {
       const message =
         err.code === 'auth/invalid-verification-code'
