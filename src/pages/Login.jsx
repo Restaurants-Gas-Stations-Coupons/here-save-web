@@ -9,6 +9,9 @@ import AuthLayout from '../layouts/AuthLayout';
 import LoginForm from '../components/features/auth/LoginForm';
 import OTPModal from '../components/ui/OTPModal';
 
+// Temporary demo flag: when true, bypass phone auth and go straight to dashboard.
+const DEMO_MODE = true;
+
 const Login = ({ onLoginSuccess }) => {
   const { t, i18n } = useTranslation();
   const [isOtpOpen, setIsOtpOpen] = useState(false);
@@ -56,6 +59,11 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   const handleLoginSubmit = async (data) => {
+    if (DEMO_MODE) {
+      if (onLoginSuccess) onLoginSuccess('admin');
+      return;
+    }
+
     // Hardcoded bypass for Superadmin test number (10 digits)
     if (data.phoneNumber === '2222222222') {
       setAuthData(data);
