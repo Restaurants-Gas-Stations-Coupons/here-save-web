@@ -1,4 +1,4 @@
-import { get, post, patch } from './apiClient';
+import { get, post, patch, del } from './apiClient';
 
 export async function fetchCoupons(params = {}) {
     const qs = new URLSearchParams(params).toString();
@@ -16,6 +16,11 @@ export async function createCoupon(data) {
     return response.data;
 }
 
+export async function updateCoupon(id, data) {
+  const response = await patch(`/coupons/${id}`, data);
+  return response.data;
+}
+
 export async function approveCoupon(id) {
     const response = await patch(`/coupons/${id}/approve`, {});
     return response.data;
@@ -23,5 +28,10 @@ export async function approveCoupon(id) {
 
 export async function rejectCoupon(id, reason = '') {
     const response = await patch(`/coupons/${id}/reject`, { reason });
+    return response.data;
+}
+
+export async function deleteCoupon(id) {
+    const response = await del(`/coupons/${id}`);
     return response.data;
 }

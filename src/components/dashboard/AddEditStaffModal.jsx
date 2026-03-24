@@ -3,10 +3,21 @@ import { Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import TimePicker from '../ui/TimePicker';
 
+const Field = ({ label, error, children }) => (
+    <div className="space-y-2">
+        {label && <label className="text-[13px] font-semibold text-[#555555] ml-1">{label}</label>}
+        {children}
+        {error && <p className="text-[12px] text-red-500 ml-1 flex items-center gap-1">
+            <span className="w-3.5 h-3.5 rounded-full bg-red-100 flex items-center justify-center text-[9px] font-black text-red-500 flex-shrink-0">!</span>
+            {error}
+        </p>}
+    </div>
+);
+
 const AddEditStaffModal = ({ isOpen, onClose, onSave, member = null }) => {
     const { t } = useTranslation();
 
-    const emptyForm = { name: '', phone: '', role: '', startTime: '', endTime: '' };
+    const emptyForm = { name: '', email: '', phone: '', role: '', startTime: '', endTime: '' };
     const [formData, setFormData] = useState(emptyForm);
     const [errors, setErrors] = useState({});
     const [submitting, setSubmitting] = useState(false);
@@ -17,6 +28,7 @@ const AddEditStaffModal = ({ isOpen, onClose, onSave, member = null }) => {
             if (member) {
                 setFormData({
                     name: member.name || '',
+                    email: member.email || '',
                     phone: member.phone || '',
                     role: member.role || '',
                     startTime: member.shift?.split(' to ')[0] || '',
@@ -55,6 +67,10 @@ const AddEditStaffModal = ({ isOpen, onClose, onSave, member = null }) => {
         else if (!/^\+?[0-9]{10,15}$/.test(formData.phone.replace(/\s/g, '')))
             e.phone = 'Enter a valid phone number (10–15 digits).';
 
+        if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+            e.email = 'Enter a valid email address.';
+        }
+
         if (!formData.role) e.role = 'Please select a role.';
 
         if (!formData.startTime) e.startTime = 'Start time is required.';
@@ -79,17 +95,6 @@ const AddEditStaffModal = ({ isOpen, onClose, onSave, member = null }) => {
             setSubmitting(false);
         }
     };
-
-    const Field = ({ label, error, children }) => (
-        <div className="space-y-2">
-            {label && <label className="text-[13px] font-semibold text-[#555555] ml-1">{label}</label>}
-            {children}
-            {error && <p className="text-[12px] text-red-500 ml-1 flex items-center gap-1">
-                <span className="w-3.5 h-3.5 rounded-full bg-red-100 flex items-center justify-center text-[9px] font-black text-red-500 flex-shrink-0">!</span>
-                {error}
-            </p>}
-        </div>
-    );
 
     const inputCls = (hasError) =>
         `w-full px-5 py-4 bg-[#F8F9FA] border rounded-[16px] text-[15px] focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary/5 transition-all placeholder:text-gray-400 ${hasError ? 'border-red-400 ring-2 ring-red-100' : 'border-transparent focus:border-primary/20'}`;
@@ -132,6 +137,16 @@ const AddEditStaffModal = ({ isOpen, onClose, onSave, member = null }) => {
                                     setField('phone', v);
                                 }}
                                 className={inputCls(!!errors.phone)}
+                            />
+                        </Field>
+
+                        <Field label="Email (optional)" error={errors.email}>
+                            <input
+                                type="email"
+                                placeholder="Enter email"
+                                value={formData.email}
+                                onChange={(e) => setField('email', e.target.value)}
+                                className={inputCls(!!errors.email)}
                             />
                         </Field>
 

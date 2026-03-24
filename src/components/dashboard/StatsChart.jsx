@@ -75,8 +75,21 @@ const CustomLegend = () => (
  *   statsData  — array of stat objects { id, label, value, badge }
  *   defaultFilter — string shown in the filter pill
  */
-const StatsChart = ({ data, statsData, defaultFilter = 'Today' }) => {
-    const [filter, setFilter] = React.useState(defaultFilter);
+const StatsChart = ({
+    data,
+    statsData,
+    selectedRangeLabel = 'Last 7 Days',
+    onRangeChange,
+    rangeOptions = [],
+}) => {
+    const [open, setOpen] = React.useState(false);
+    const options = rangeOptions.length > 0 ? rangeOptions : [
+        { key: 'today', label: 'Today' },
+        { key: 'yesterday', label: 'Yesterday' },
+        { key: 'last7', label: 'Last 7 Days' },
+        { key: 'last30', label: 'Last 30 Days' },
+        { key: 'thisMonth', label: 'This Month' },
+    ];
 
     return (
         /* Outer light-gray section card — NO white bg on the header row */
@@ -90,10 +103,33 @@ const StatsChart = ({ data, statsData, defaultFilter = 'Today' }) => {
                     </div>
                     <span className="text-[14px] font-semibold text-dark">Statastics</span>
                 </div>
-                <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-[10px] px-3 py-1.5 text-[12px] text-dark cursor-pointer">
-                    <ArrowLeftRight size={12} className="text-grayCustom" />
-                    <span>{filter}</span>
-                    <ChevronDown size={12} className="text-grayCustom" />
+                <div className="relative">
+                    <button
+                        type="button"
+                        onClick={() => setOpen((prev) => !prev)}
+                        className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-[10px] px-3 py-1.5 text-[12px] text-dark cursor-pointer"
+                    >
+                        <ArrowLeftRight size={12} className="text-grayCustom" />
+                        <span>{selectedRangeLabel}</span>
+                        <ChevronDown size={12} className={`text-grayCustom transition-transform ${open ? 'rotate-180' : ''}`} />
+                    </button>
+                    {open && (
+                        <div className="absolute right-0 mt-2 w-[160px] bg-white border border-gray-100 rounded-[12px] shadow-md z-20 py-1">
+                            {options.map((opt) => (
+                                <button
+                                    key={opt.key}
+                                    type="button"
+                                    onClick={() => {
+                                        onRangeChange?.(opt.key);
+                                        setOpen(false);
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-[12px] text-dark hover:bg-[#F7F7F7] transition-colors"
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 

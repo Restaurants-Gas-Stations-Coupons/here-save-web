@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { sidebarData } from '../../constants/layoutData';
-import { Pencil, Trash2, Check, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { sidebarData, superadminSidebarData } from '../../constants/layoutData';
+import { Pencil, Trash2, Check, Plus, ChevronLeft, ChevronRight, Fuel, Utensils } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import StaffTableRow from '../../components/dashboard/StaffTableRow';
 import AddEditStaffModal from '../../components/dashboard/AddEditStaffModal';
 import { fetchEmployees, createEmployee } from '../../services/staffService';
 import { fetchOutlets } from '../../services/dashboardService';
+import CustomSelect from '../../components/ui/CustomSelect';
 
 const mapEmployee = (emp) => {
     const user = emp.User || emp;
     return {
         id: emp.id,
-        name: user.name || 'Unknown',
+        name: user.full_name || user.name || 'Unknown',
         phone: user.phone || 'N/A',
         email: user.email || 'N/A',
         role: user.role || 'EMPLOYEE',
@@ -24,7 +25,7 @@ const mapEmployee = (emp) => {
     };
 };
 
-const StaffMembers = ({ onNavigate, userRole }) => {
+const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
     const { t } = useTranslation();
     const [selectedIds, setSelectedIds] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,6 +39,8 @@ const StaffMembers = ({ onNavigate, userRole }) => {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [error, setError] = useState('');
+    const currentSidebarData = userRole === 'superadmin' ? superadminSidebarData : sidebarData;
+    const selectedOutlet = outlets.find((o) => o.id === selectedOutletId) || null;
 
     const loadStaff = useCallback(async (outletId) => {
         if (!outletId) return;
@@ -77,7 +80,7 @@ const StaffMembers = ({ onNavigate, userRole }) => {
     }, [loadStaff]);
 
     const handleNavChange = (navId) => {
-        if (navId === 'dashboard') onNavigate?.('dashboard');
+        if (navId === 'dashboard' || navId === 'restaurants') onNavigate?.('dashboard');
         if (navId === 'coupons') onNavigate?.('coupons');
     };
 
@@ -106,23 +109,15 @@ const StaffMembers = ({ onNavigate, userRole }) => {
                 // No update employee route in backend yet, log for now
                 console.log('Edit employee (no backend PATCH route yet):', formData);
             } else {
-                // createEmployee requires user_id – backend links employee to existing user.
-                // The form collects phone number; in a real flow we'd look up the user by phone.
-                // For now, we persist by logging - this is a known limitation.
-                console.log('Create employee payload:', {
+                await createEmployee({
+                    full_name: formData.name?.trim(),
+                    email: formData.email?.trim() || undefined,
+                    phone: formData.phone?.replace(/\s|-/g, '').trim(),
                     outlet_id: selectedOutletId,
                     shift_start: formData.startTime ? `${formData.startTime}:00` : undefined,
                     shift_end: formData.endTime ? `${formData.endTime}:00` : undefined,
+                    status: 'ACTIVE',
                 });
-                // NOTE: Backend requires user_id. This means the employee's user account must
-                // already exist in the system (via Firebase login). When user_id is available,
-                // uncomment below:
-                // await createEmployee({
-                //   user_id: resolvedUserId,
-                //   outlet_id: selectedOutletId,
-                //   shift_start: formData.startTime ? `${formData.startTime}:00` : undefined,
-                //   shift_end: formData.endTime ? `${formData.endTime}:00` : undefined,
-                // });
             }
             setIsModalOpen(false);
             await loadStaff(selectedOutletId);
@@ -141,40 +136,43 @@ const StaffMembers = ({ onNavigate, userRole }) => {
 
     return (
         <DashboardLayout
-            sidebarData={sidebarData}
+            sidebarData={currentSidebarData}
             activeNav="staff"
             onNavChange={handleNavChange}
-            title="Dashboard"
             role={userRole}
+            currentUser={currentUser}
         >
             <div className="flex flex-col gap-4 h-full font-onest">
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">
-                        {error}
-                    </div>
-                )}
-
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <button className="flex items-center gap-2.5 px-5 py-2.5 bg-white border border-gray-100 rounded-[14px] text-[14px] font-semibold text-dark hover:bg-gray-50 transition-all shadow-sm">
                             <img src="/images/filter.svg" alt="filter" className="w-[18px] h-[18px]" />
                             {t('staff.filter')}
                         </button>
-                        {outlets.length > 1 && (
-                            <select
-                                className="px-4 py-2.5 bg-white font-semibold text-[14px] rounded-[14px] border border-gray-100 outline-none shadow-sm"
+                        {userRole === 'superadmin' && outlets.length > 0 && (
+                            <CustomSelect
+                                className="w-full sm:w-[260px]"
+                                buttonClassName="bg-white border-[3px] border-[#2A90E8] shadow-[0px_1px_10px_0px_rgba(0,0,0,0.1)]"
+                                menuClassName="shadow-[0px_1px_10px_0px_rgba(0,0,0,0.1)]"
                                 value={selectedOutletId || ''}
-                                onChange={(e) => {
-                                    setSelectedOutletId(Number(e.target.value));
-                                    loadStaff(Number(e.target.value));
+                                onChange={(nextValue) => {
+                                    const outletId = Number(nextValue);
+                                    setSelectedOutletId(outletId);
+                                    loadStaff(outletId);
                                     setCurrentPage(1);
                                     setSelectedIds([]);
                                 }}
-                            >
-                                {outlets.map(o => (
-                                    <option key={o.id} value={o.id}>{o.name}</option>
-                                ))}
-                            </select>
+                                options={outlets.map((o) => ({
+                                    value: o.id,
+                                    label: o.type === 'RESTAURANT' ? `Restaurant - ${o.name}` : `Petrol - ${o.name}`,
+                                }))}
+                                icon={
+                                    selectedOutlet?.type === 'RESTAURANT'
+                                        ? <Utensils size={18} strokeWidth={2.3} className="text-primary" />
+                                        : <Fuel size={18} strokeWidth={2.3} className="text-primary" />
+                                }
+                                placeholder="Select outlet"
+                            />
                         )}
                     </div>
 

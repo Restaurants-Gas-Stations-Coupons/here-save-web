@@ -19,6 +19,7 @@ const TimePicker = ({ value, onChange, placeholder = 'Select time', error, label
     };
 
     const [open, setOpen] = useState(false);
+    const [popupPlacement, setPopupPlacement] = useState({ vertical: 'down' });
     const [tempHour, setTempHour] = useState(parseTime(value).hour);
     const [tempMinute, setTempMinute] = useState(parseTime(value).minute);
     const ref = useRef(null);
@@ -36,6 +37,23 @@ const TimePicker = ({ value, onChange, placeholder = 'Select time', error, label
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
+
+    useEffect(() => {
+        if (!open || !ref.current) return;
+        const calc = () => {
+            const rect = ref.current.getBoundingClientRect();
+            const popupHeight = 300;
+            const vertical = rect.bottom + 8 + popupHeight > window.innerHeight ? 'up' : 'down';
+            setPopupPlacement({ vertical });
+        };
+        calc();
+        window.addEventListener('resize', calc);
+        window.addEventListener('scroll', calc, true);
+        return () => {
+            window.removeEventListener('resize', calc);
+            window.removeEventListener('scroll', calc, true);
+        };
+    }, [open]);
 
     const pad = (n) => String(n).padStart(2, '0');
     const to12h = (h) => {
@@ -88,8 +106,15 @@ const TimePicker = ({ value, onChange, placeholder = 'Select time', error, label
             {error && <p className="mt-1 text-[12px] text-red-500 ml-1">{error}</p>}
 
             {open && (
-                <div className="absolute z-[200] mt-2 bg-white rounded-[20px] shadow-2xl shadow-black/10 border border-gray-100 p-5 animate-in fade-in zoom-in-95 duration-150"
-                    style={{ minWidth: 200 }}>
+                <div
+                    className="absolute z-[200] bg-white rounded-[20px] shadow-2xl shadow-black/10 border border-gray-100 p-5 animate-in fade-in zoom-in-95 duration-150"
+                    style={{
+                        minWidth: 220,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        ...(popupPlacement.vertical === 'down' ? { top: 'calc(100% + 8px)' } : { bottom: 'calc(100% + 8px)' }),
+                    }}
+                >
                     <p className="text-[12px] font-semibold text-gray-400 mb-4 text-center uppercase tracking-wider">Select Time</p>
 
                     <div className="flex items-center justify-center gap-3 mb-4">

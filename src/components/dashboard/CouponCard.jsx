@@ -11,6 +11,7 @@ const CouponCard = ({
     onDelete,
     onCancel,
     onApprove,
+    onReject,
     onReApprove,
     scale = 1.25,
     variant = 'simplified',
@@ -29,6 +30,8 @@ const CouponCard = ({
     const notchY = 156 * scale;
 
     const isDetailed = variant === 'detailed';
+    const isSuperadminPendingOrRejected =
+        role === 'superadmin' && (status === 'Pending' || status === 'Rejected');
 
     return (
         <div
@@ -116,7 +119,7 @@ const CouponCard = ({
             </div>
 
             {/* Actions (Floating style matching reference) */}
-            {isDetailed && (isHovered || isSelected) && (
+            {isDetailed && (isHovered || isSelected) && !isSuperadminPendingOrRejected && (
                 <div className="relative z-10 flex items-center gap-2 mt-6 px-1 w-full max-w-[175px] animate-in fade-in slide-in-from-top-2 duration-200">
                     <button
                         onClick={(e) => {
@@ -152,18 +155,40 @@ const CouponCard = ({
             )}
 
             {/* Superadmin Default Actions (When NOT hovered/selected) */}
-            {isDetailed && !(isHovered || isSelected) && role === 'superadmin' && (status === 'Pending' || status === 'Rejected') && (
+            {isDetailed && role === 'superadmin' && (status === 'Pending' || status === 'Rejected') && (
                 <div className="relative z-10 flex items-center gap-2 mt-6 px-1 w-full max-w-[175px] animate-in fade-in slide-in-from-top-2 duration-200">
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (status === 'Pending' && onApprove) onApprove();
-                            if (status === 'Rejected' && onReApprove) onReApprove();
-                        }}
-                        className="flex-1 py-3 px-1 bg-[#DC0004] hover:bg-[#DC0004]/95 text-white text-[13px] font-bold rounded-[14px] shadow-md shadow-[#DC0004]/25 transition-all active:scale-95 uppercase"
-                    >
-                        {status === 'Pending' ? 'Approve' : 'Re-Approve'}
-                    </button>
+                    {status === 'Pending' ? (
+                        <>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onApprove && onApprove();
+                                }}
+                                className="flex-1 py-3 px-1 bg-[#DC0004] hover:bg-[#DC0004]/95 text-white text-[13px] font-bold rounded-[14px] shadow-md shadow-[#DC0004]/25 transition-all active:scale-95 uppercase"
+                            >
+                                Approve
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onReject && onReject();
+                                }}
+                                className="flex-1 py-3 px-1 bg-[#1A1A1A] hover:bg-black text-white text-[13px] font-bold rounded-[14px] shadow-lg transition-all active:scale-95 uppercase"
+                            >
+                                Reject
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onReApprove && onReApprove();
+                            }}
+                            className="flex-1 py-3 px-1 bg-[#DC0004] hover:bg-[#DC0004]/95 text-white text-[13px] font-bold rounded-[14px] shadow-md shadow-[#DC0004]/25 transition-all active:scale-95 uppercase"
+                        >
+                            Re-Approve
+                        </button>
+                    )}
                 </div>
             )}
         </div>

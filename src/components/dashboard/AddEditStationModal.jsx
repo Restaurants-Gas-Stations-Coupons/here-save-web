@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Fuel, Utensils } from 'lucide-react';
 
+const Field = ({ label, error, children }) => (
+    <div className="space-y-1.5">
+        {label && <label className="text-[12px] font-semibold text-[#555555] ml-1">{label}</label>}
+        {children}
+        {error && <p className="text-[12px] text-red-500 ml-1 flex items-center gap-1 mt-1">
+            <span className="w-3.5 h-3.5 rounded-full bg-red-100 flex items-center justify-center text-[9px] font-black text-red-500 flex-shrink-0">!</span>
+            {error}
+        </p>}
+    </div>
+);
+
 const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityType = 'station' }) => {
     const cities = ['Hyderabad', 'Bangalore', 'Mumbai', 'Delhi', 'Chennai', 'Pune'];
     const states = ['Telangana', 'Karnataka', 'Maharashtra', 'Delhi', 'Tamil Nadu'];
@@ -28,10 +39,10 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
                 setFormData({
                     name: station.name || '',
                     address: station.address || '',
-                    city: 'Hyderabad',
-                    state: 'Telangana',
-                    managerName: station.manager || '',
-                    managerPhone: station.contact || '',
+                    city: station.city,
+                    state: station.state,
+                    managerName: station.manager_name ,
+                    managerPhone: station.manager_phone ,
                 });
             } else {
                 setFormData(emptyForm);
@@ -58,7 +69,10 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
         if (!formData.city) e.city = 'City is required.';
         if (!formData.state) e.state = 'State is required.';
 
-        if (formData.managerPhone && !/^\+?[0-9]{10,15}$/.test(formData.managerPhone.replace(/\s/g, '')))
+        if (!formData.managerName.trim()) e.managerName = 'Manager name is required.';
+
+        if (!formData.managerPhone.trim()) e.managerPhone = 'Manager phone is required.';
+        else if (!/^\+?[0-9]{10,15}$/.test(formData.managerPhone.replace(/\s/g, '')))
             e.managerPhone = 'Enter a valid phone number (10–15 digits).';
 
         return e;
@@ -74,17 +88,6 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
             setSubmitting(false);
         }
     };
-
-    const Field = ({ label, error, children }) => (
-        <div className="space-y-1.5">
-            {label && <label className="text-[12px] font-semibold text-[#555555] ml-1">{label}</label>}
-            {children}
-            {error && <p className="text-[12px] text-red-500 ml-1 flex items-center gap-1 mt-1">
-                <span className="w-3.5 h-3.5 rounded-full bg-red-100 flex items-center justify-center text-[9px] font-black text-red-500 flex-shrink-0">!</span>
-                {error}
-            </p>}
-        </div>
-    );
 
     const inputCls = (hasError) =>
         `w-full px-5 py-3.5 bg-[#F4F4F4] border rounded-[16px] text-[14px] focus:bg-white focus:outline-none focus:border-primary/20 transition-all placeholder:text-gray-400 ${hasError ? 'border-red-400 ring-2 ring-red-100' : 'border-transparent'}`;
@@ -127,38 +130,42 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
                         </Field>
 
                         <div className="flex gap-4">
-                            <Field label="City *" error={errors.city}>
-                                <div className="relative">
-                                    <select
-                                        value={formData.city}
-                                        onChange={(e) => setField('city', e.target.value)}
-                                        className={`${inputCls(!!errors.city)} appearance-none cursor-pointer`}
-                                    >
-                                        {cities.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="#939393" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            <div className="flex-1 min-w-0">
+                                <Field label="City *" error={errors.city}>
+                                    <div className="relative">
+                                        <select
+                                            value={formData.city}
+                                            onChange={(e) => setField('city', e.target.value)}
+                                            className={`${inputCls(!!errors.city)} appearance-none cursor-pointer`}
+                                        >
+                                            {cities.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                            <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="#939393" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                        </div>
                                     </div>
-                                </div>
-                            </Field>
+                                </Field>
+                            </div>
 
-                            <Field label="State *" error={errors.state}>
-                                <div className="relative">
-                                    <select
-                                        value={formData.state}
-                                        onChange={(e) => setField('state', e.target.value)}
-                                        className={`${inputCls(!!errors.state)} appearance-none cursor-pointer`}
-                                    >
-                                        {states.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="#939393" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            <div className="flex-1 min-w-0">
+                                <Field label="State *" error={errors.state}>
+                                    <div className="relative">
+                                        <select
+                                            value={formData.state}
+                                            onChange={(e) => setField('state', e.target.value)}
+                                            className={`${inputCls(!!errors.state)} appearance-none cursor-pointer`}
+                                        >
+                                            {states.map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                            <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="#939393" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                        </div>
                                     </div>
-                                </div>
-                            </Field>
+                                </Field>
+                            </div>
                         </div>
 
-                        <Field label="Manager Name — optional" error={errors.managerName}>
+                        <Field label="Manager Name *" error={errors.managerName}>
                             <input
                                 type="text"
                                 placeholder="Enter manager name"
@@ -168,7 +175,7 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
                             />
                         </Field>
 
-                        <Field label="Manager Phone — optional" error={errors.managerPhone}>
+                        <Field label="Manager Phone *" error={errors.managerPhone}>
                             <input
                                 type="tel"
                                 placeholder="+91 98765 43210"

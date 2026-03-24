@@ -8,6 +8,7 @@ import TransactionRow from '../../components/dashboard/TransactionRow';
 import TransactionHistoryView from '../../components/dashboard/TransactionHistoryView';
 import BillSidebar from '../../components/dashboard/BillSidebar';
 import AddEditStationModal from '../../components/dashboard/AddEditStationModal';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 import { sidebarData, superadminSidebarData } from '../../constants/layoutData';
 import {
     fetchOutlets,
@@ -34,16 +35,65 @@ const mapTransaction = (t) => ({
     time: t.redeemed_at ? new Date(t.redeemed_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '-',
 });
 
-const Dashboard = ({ onNavigate, userRole }) => {
+const formatNumber = (value) => new Intl.NumberFormat('en-IN').format(Number(value || 0));
+
+const RANGE_OPTIONS = [
+    { key: 'today', label: 'Today' },
+    { key: 'yesterday', label: 'Yesterday' },
+    { key: 'last7', label: 'Last 7 Days' },
+    { key: 'last30', label: 'Last 30 Days' },
+    { key: 'thisMonth', label: 'This Month' },
+];
+
+const toYmd = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+const buildRangeParams = (rangeKey) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (rangeKey === 'today') {
+        const day = toYmd(today);
+        return { from: day, to: day };
+    }
+    if (rangeKey === 'yesterday') {
+        const y = new Date(today);
+        y.setDate(y.getDate() - 1);
+        const day = toYmd(y);
+        return { from: day, to: day };
+    }
+    if (rangeKey === 'last30') {
+        const from = new Date(today);
+        from.setDate(from.getDate() - 29);
+        return { from: toYmd(from), to: toYmd(today) };
+    }
+    if (rangeKey === 'thisMonth') {
+        const from = new Date(today.getFullYear(), today.getMonth(), 1);
+        return { from: toYmd(from), to: toYmd(today) };
+    }
+    // default: last 7 days
+    const from = new Date(today);
+    from.setDate(from.getDate() - 6);
+    return { from: toYmd(from), to: toYmd(today) };
+};
+
+const Dashboard = ({ onNavigate, userRole, currentUser }) => {
     const [activeNav, setActiveNav] = useState('dashboard');
     const [view, setView] = useState('dashboard');
     const [selectedTransactionId, setSelectedTransactionId] = useState(null);
     const [isAddStationOpen, setIsAddStationOpen] = useState(false);
     const [stationToEdit, setStationToEdit] = useState(null);
+    const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
 
     const [outlets, setOutlets] = useState([]);
     const [chartData, setChartData] = useState([]);
+    const [statsData, setStatsData] = useState([]);
+    const [selectedRange, setSelectedRange] = useState('last7');
     const [activeCoupons, setActiveCoupons] = useState([]);
     const [transactionHistory, setTransactionHistory] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -55,10 +105,12 @@ const Dashboard = ({ onNavigate, userRole }) => {
     // Load outlets
     const loadOutlets = useCallback(async () => {
         try {
-            const params = isRestaurants ? { type: 'RESTAURANT' } : {};
+            const params = isRestaurants ? { type: 'RESTAURANT' } : { type: 'PETROL' };
             const res = await fetchOutlets(params);
             const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-            const filtered = isRestaurants ? list.filter(o => o.type === 'RESTAURANT') : list;
+            const filtered = isRestaurants
+                ? list.filter(o => o.type === 'RESTAURANT')
+                : list.filter(o => o.type === 'PETROL');
             setOutlets(filtered);
             setCurrentIndex(0);
         } catch (err) {
@@ -72,17 +124,20 @@ const Dashboard = ({ onNavigate, userRole }) => {
     const loadDashboardData = useCallback(async () => {
         const outlet = outlets[currentIndex];
         if (!outlet) {
+            setStatsData([
+                { id: 'coupons', label: 'Coupons Active', value: '0', badge: { type: 'active', text: 'Active' } },
+                { id: 'redemptions', label: 'Redemptions', value: '0', badge: { type: 'down', text: '0%' } },
+                { id: 'discounts', label: 'Discounts', value: '0', badge: { type: 'up', text: '0%' } },
+                { id: 'totalSales', label: 'Total Sale', value: '0', badge: { type: 'up', text: '0%' } },
+            ]);
             setLoading(false);
             return;
         }
         setLoading(true);
         setError('');
         try {
-            const [analyticsRes, couponsRes, txRes] = await Promise.all([
-                fetchOutletAnalytics(outlet.id).catch(() => null),
-                fetchCoupons({ outlet_id: outlet.id, status: 'APPROVED' }).catch(() => null),
-                fetchRedemptions({ outlet_id: outlet.id }).catch(() => null),
-            ]);
+            // Statistics must come from a single source: analytics API.
+            const analyticsRes = await fetchOutletAnalytics(outlet.id, buildRangeParams(selectedRange)).catch(() => null);
 
             // Chart data
             if (analyticsRes?.daily_redemptions) {
@@ -96,21 +151,54 @@ const Dashboard = ({ onNavigate, userRole }) => {
                 setChartData([]);
             }
 
-            // Coupons
-            const rawCoupons = Array.isArray(couponsRes?.data) ? couponsRes.data
-                : Array.isArray(couponsRes) ? couponsRes : [];
+            const summary = analyticsRes?.summary || {};
+            setStatsData([
+                {
+                    id: 'coupons',
+                    label: 'Coupons Active',
+                    value: formatNumber(summary.coupons_active),
+                    badge: { type: 'active', text: 'Active' },
+                },
+                {
+                    id: 'redemptions',
+                    label: 'Redemptions',
+                    value: formatNumber(summary.redemptions),
+                    badge: { type: 'down', text: '6.8%' },
+                },
+                {
+                    id: 'discounts',
+                    label: 'Discounts',
+                    value: formatNumber(summary.discounts),
+                    badge: { type: 'up', text: '6.8%' },
+                },
+                {
+                    id: 'totalSales',
+                    label: 'Total Sale',
+                    value: formatNumber(summary.total_sales),
+                    badge: { type: 'up', text: '6.8%' },
+                },
+            ]);
+
+            // Non-statistics sections load independently and do not affect analytics rendering.
+            const couponsRes = await fetchCoupons({ outlet_id: outlet.id, status: 'APPROVED' }).catch(() => null);
+            const rawCoupons = Array.isArray(couponsRes?.data) ? couponsRes.data : Array.isArray(couponsRes) ? couponsRes : [];
             setActiveCoupons(rawCoupons.map(mapCoupon));
 
-            // Transactions
-            const rawTx = Array.isArray(txRes?.data) ? txRes.data
-                : Array.isArray(txRes) ? txRes : [];
+            const txRes = await fetchRedemptions({ outlet_id: outlet.id }).catch(() => null);
+            const rawTx = Array.isArray(txRes?.data) ? txRes.data : Array.isArray(txRes) ? txRes : [];
             setTransactionHistory(rawTx.map(mapTransaction));
         } catch (err) {
             setError(err.message || 'Failed to load dashboard data');
+            setStatsData([
+                { id: 'coupons', label: 'Coupons Active', value: '0', badge: { type: 'active', text: 'Active' } },
+                { id: 'redemptions', label: 'Redemptions', value: '0', badge: { type: 'down', text: '0%' } },
+                { id: 'discounts', label: 'Discounts', value: '0', badge: { type: 'up', text: '0%' } },
+                { id: 'totalSales', label: 'Total Sale', value: '0', badge: { type: 'up', text: '0%' } },
+            ]);
         } finally {
             setLoading(false);
         }
-    }, [outlets, currentIndex]);
+    }, [outlets, currentIndex, selectedRange]);
 
     useEffect(() => {
         if (outlets.length > 0) loadDashboardData();
@@ -132,6 +220,9 @@ const Dashboard = ({ onNavigate, userRole }) => {
                 name: formData.name,
                 address: formData.address,
                 city: formData.city,
+                state: formData.state,
+                manager_name: formData.managerName,
+                manager_phone: formData.managerPhone,
                 type: isRestaurants ? 'RESTAURANT' : 'PETROL',
             };
             if (stationToEdit) {
@@ -142,6 +233,7 @@ const Dashboard = ({ onNavigate, userRole }) => {
             setIsAddStationOpen(false);
             setStationToEdit(null);
             await loadOutlets();
+            setCurrentIndex(0);
         } catch (err) {
             setError(err.message || 'Failed to save outlet');
         } finally {
@@ -149,8 +241,40 @@ const Dashboard = ({ onNavigate, userRole }) => {
         }
     };
 
+    const handleDeactivateStation = async () => {
+        const outletId = currentEntityObj?.id;
+        if (!outletId) return;
+        setActionLoading(true);
+        setError('');
+        try {
+            await updateOutlet(outletId, { status: 'DEACTIVATED' });
+            setConfirmDeactivateOpen(false);
+            await loadOutlets();
+        } catch (err) {
+            setError(err.message || 'Failed to deactivate outlet');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     const currentEntityObj = outlets[currentIndex] || {};
-    const currentSidebarData = userRole === 'superadmin' ? superadminSidebarData : sidebarData;
+    const currentSidebarData = userRole === 'superadmin'
+        ? {
+            ...superadminSidebarData,
+            navItems: superadminSidebarData.navItems.map((item) => {
+                if (item.id === activeNav && (item.id === 'dashboard' || item.id === 'restaurants')) {
+                    return {
+                        ...item,
+                        subItems: outlets.map((outlet, idx) => ({
+                            id: idx,
+                            label: outlet.name || `${item.id === 'dashboard' ? 'Station' : 'Restaurant'} ${idx + 1}`,
+                        })),
+                    };
+                }
+                return item;
+            }),
+        }
+        : sidebarData;
 
     const stationDetailData = {
         name: currentEntityObj.name || 'Unknown Outlet',
@@ -159,7 +283,7 @@ const Dashboard = ({ onNavigate, userRole }) => {
         status: currentEntityObj.status || 'ACTIVE',
         outletId: currentEntityObj.id,
         manager: currentEntityObj.manager_name || 'N/A',
-        contact: currentEntityObj.contact_number || 'N/A',
+        contact: currentEntityObj.manager_phone || 'N/A',
     };
 
     return (
@@ -170,18 +294,13 @@ const Dashboard = ({ onNavigate, userRole }) => {
                 onNavChange={handleNavChange}
                 activeSubNav={currentIndex}
                 onSubNavChange={setCurrentIndex}
-                title={view === 'transactions' ? 'Transaction History' : 'Dashboard'}
+                title={view === 'transactions' ? 'Transaction History' : ''}
                 role={userRole}
+                currentUser={currentUser}
                 onAddStation={() => { setStationToEdit(null); setIsAddStationOpen(true); }}
             >
                 <div className="flex gap-6 h-full">
                     <div className="flex-1 flex flex-col gap-4 min-w-0">
-                        {error && (
-                            <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">
-                                {error}
-                            </div>
-                        )}
-
                         {view === 'dashboard' ? (
                             <>
                                 {userRole === 'superadmin' && (
@@ -227,12 +346,19 @@ const Dashboard = ({ onNavigate, userRole }) => {
                                             role={userRole}
                                             entityType={isRestaurants ? 'restaurant' : 'station'}
                                             onEdit={() => {
-                                                setStationToEdit(stationDetailData);
+                                                setStationToEdit(currentEntityObj);
                                                 setIsAddStationOpen(true);
                                             }}
+                                            onDeactivate={() => setConfirmDeactivateOpen(true)}
                                         />
 
-                                        <StatsChart data={chartData} statsData={[]} />
+                                        <StatsChart
+                                            data={chartData}
+                                            statsData={statsData}
+                                            selectedRangeLabel={RANGE_OPTIONS.find((o) => o.key === selectedRange)?.label || 'Last 7 Days'}
+                                            rangeOptions={RANGE_OPTIONS}
+                                            onRangeChange={setSelectedRange}
+                                        />
 
                                         <div className="bg-white rounded-[16px] px-6 py-5">
                                             <div className="flex items-center gap-2 mb-4">
@@ -297,6 +423,17 @@ const Dashboard = ({ onNavigate, userRole }) => {
                 station={stationToEdit}
                 entityType={isRestaurants ? 'restaurant' : 'station'}
                 loading={actionLoading}
+            />
+
+            <ConfirmModal
+                isOpen={confirmDeactivateOpen}
+                title={isRestaurants ? 'Deactivate Restaurant' : 'Deactivate Station'}
+                message={`Are you sure you want to deactivate this ${isRestaurants ? 'restaurant' : 'station'}?`}
+                confirmText="Deactivate"
+                tone="danger"
+                loading={actionLoading}
+                onCancel={() => setConfirmDeactivateOpen(false)}
+                onConfirm={handleDeactivateStation}
             />
         </>
     );

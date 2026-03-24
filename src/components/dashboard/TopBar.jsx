@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Search, Bell } from 'lucide-react';
 import ProfilePopover from './ProfilePopover';
 import NotificationPopover from './NotificationPopover';
@@ -14,11 +14,32 @@ const mapNotification = (n) => ({
     isUnread: !n.is_read,
 });
 
-const TopBar = ({ title, role, onAddStation }) => {
+const getInitials = (name) => {
+    const n = (name || '').trim();
+    if (!n) return 'U';
+    const parts = n.split(/\s+/).slice(0, 2);
+    return parts.map((p) => p[0]?.toUpperCase() || '').join('') || 'U';
+};
+
+const TopBar = ({ title, role, currentUser, onAddStation, navItems = [], activeNav, onNavChange }) => {
+    const validNavItems = Array.isArray(navItems)
+        ? navItems.filter((item) => item?.id && !item?.hidden)
+        : [];
+    const currentNavIndex = validNavItems.findIndex((item) => item.id === activeNav);
+    const canGoPrev = validNavItems.length > 1 && currentNavIndex > 0;
+    const canGoNext = validNavItems.length > 1 && currentNavIndex >= 0 && currentNavIndex < validNavItems.length - 1;
+
+    const goToNavByIndex = (index) => {
+        const target = validNavItems[index];
+        if (target?.id && onNavChange) onNavChange(target.id);
+    };
+
     const [showProfile, setShowProfile] = useState(false);
     const [showNotif, setShowNotif] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const profileRef = useRef(null);
+    const notifRef = useRef(null);
 
     useEffect(() => {
         // Notifications are only for USER role in the backend.
@@ -37,6 +58,20 @@ const TopBar = ({ title, role, onAddStation }) => {
         load();
     }, [role]);
 
+    useEffect(() => {
+        const handleOutsideClick = (event) => {
+            if (profileRef.current && !profileRef.current.contains(event.target)) {
+                setShowProfile(false);
+            }
+            if (notifRef.current && !notifRef.current.contains(event.target)) {
+                setShowNotif(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, []);
+
     const handleMarkAllRead = async () => {
         try {
             await markAllNotificationsRead();
@@ -52,15 +87,23 @@ const TopBar = ({ title, role, onAddStation }) => {
             {/* Back / fwd */}
             <div className="flex items-center gap-1">
                 <button
-                    onClick={() => window.history.length > 1 ? window.history.back() : null}
-                    className="p-1.5 hover:bg-white rounded-lg text-[#BBBBBB] hover:text-dark transition-all"
+                    onClick={() => canGoPrev && goToNavByIndex(currentNavIndex - 1)}
+                    disabled={!canGoPrev}
+                    className={`p-1.5 rounded-lg transition-all ${canGoPrev
+                        ? 'hover:bg-white text-[#BBBBBB] hover:text-dark'
+                        : 'text-[#D4D9DF] cursor-not-allowed'
+                        }`}
                     aria-label="Go back"
                 >
                     <ChevronLeft size={20} />
                 </button>
                 <button
-                    onClick={() => window.history.forward()}
-                    className="p-1.5 hover:bg-white rounded-lg text-dark transition-all"
+                    onClick={() => canGoNext && goToNavByIndex(currentNavIndex + 1)}
+                    disabled={!canGoNext}
+                    className={`p-1.5 rounded-lg transition-all ${canGoNext
+                        ? 'hover:bg-white text-dark'
+                        : 'text-[#D4D9DF] cursor-not-allowed'
+                        }`}
                     aria-label="Go forward"
                 >
                     <ChevronRight size={20} />
@@ -83,7 +126,7 @@ const TopBar = ({ title, role, onAddStation }) => {
             </div>
 
             {/* Notifications */}
-            <div className="relative">
+            <div ref={notifRef} className="relative">
                 <button
                     onClick={() => {
                         setShowNotif(!showNotif);
@@ -108,7 +151,7 @@ const TopBar = ({ title, role, onAddStation }) => {
             </div>
 
             {/* Avatar Row */}
-            <div className="relative">
+            <div ref={profileRef} className="relative">
                 <button
                     onClick={() => {
                         setShowProfile(!showProfile);
@@ -116,18 +159,15 @@ const TopBar = ({ title, role, onAddStation }) => {
                     }}
                     className={`flex items-center p-0.5 rounded-full transition-all ${showProfile ? 'ring-2 ring-primary ring-offset-2' : ''}`}
                 >
-                    <div className="w-[42px] h-[42px] rounded-full overflow-hidden shrink-0 shadow-sm border border-white">
-                        <img
-                            src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=2574&auto=format&fit=crop"
-                            alt="User"
-                            className="w-full h-full object-cover"
-                        />
+                    <div className="w-[42px] h-[42px] rounded-full shrink-0 shadow-sm border border-white bg-[#F3F7FA] flex items-center justify-center text-[13px] font-bold text-primary">
+                        {getInitials(currentUser?.full_name)}
                     </div>
                 </button>
 
                 <ProfilePopover
                     isOpen={showProfile}
                     onClose={() => setShowProfile(false)}
+                    user={currentUser}
                 />
             </div>
         </header>

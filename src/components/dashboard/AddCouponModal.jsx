@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { X, Ticket } from 'lucide-react';
 import DatePicker from '../ui/DatePicker';
 
-const FIELD_LABELS = {
-    name: 'Coupon Name',
-    detailsValue: 'Discount Value',
-    minPurchase: 'Minimum Purchase Amount',
-    usageLimit: 'Usage Limit',
-    startDate: 'Start Date',
-    endDate: 'End Date',
-};
+const Field = ({ label, error, children }) => (
+    <div>
+        {label && <label className="block text-[13px] font-bold text-dark/80 mb-2">{label}</label>}
+        {children}
+        {error && <p className="mt-1.5 text-[12px] text-red-500 ml-1 flex items-center gap-1">
+            <span className="w-3.5 h-3.5 rounded-full bg-red-100 flex items-center justify-center text-[9px] font-black text-red-500 flex-shrink-0">!</span>
+            {error}
+        </p>}
+    </div>
+);
 
 const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }) => {
     const todayISO = new Date().toISOString().split('T')[0];
@@ -21,7 +23,7 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
         detailsValue: '',
         minPurchase: '',
         usageLimit: '',
-        startDate: todayISO,
+        startDate: '',
         endDate: '',
     };
 
@@ -35,12 +37,12 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
             if (initialData && mode === 'edit') {
                 setFormData({
                     name: initialData.name || '',
-                    type: initialData.type || 'Amount',
+                    type: initialData.type === 'PERCENTAGE' ? 'Percentage' : (initialData.type || 'Amount'),
                     detailsHeader: initialData.detailsHeader || 'Flat',
-                    detailsValue: initialData.discount || '',
+                    detailsValue: initialData.discountValue || initialData.discount || '',
                     minPurchase: initialData.minPurchase || '',
                     usageLimit: initialData.usageLimit || '',
-                    startDate: initialData.startDate || todayISO,
+                    startDate: initialData.startDate || '',
                     endDate: initialData.endDate || '',
                 });
             } else {
@@ -49,6 +51,15 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, mode]);
+
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -96,33 +107,24 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
         }
     };
 
-    const Field = ({ label, error, children }) => (
-        <div>
-            {label && <label className="block text-[13px] font-bold text-dark/80 mb-2">{label}</label>}
-            {children}
-            {error && <p className="mt-1.5 text-[12px] text-red-500 ml-1 flex items-center gap-1">
-                <span className="w-3.5 h-3.5 rounded-full bg-red-100 flex items-center justify-center text-[9px] font-black text-red-500 flex-shrink-0">!</span>
-                {error}
-            </p>}
-        </div>
-    );
-
     const inputCls = (hasError) =>
-        `w-full bg-[#F5F7F9] border-none rounded-[16px] px-4 py-3.5 text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-gray-400 ${hasError ? 'ring-2 ring-red-400' : ''}`;
+        `w-full h-[48px] bg-[#F5F7F9] border-none rounded-[16px] px-4 text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-gray-400 ${hasError ? 'ring-2 ring-red-400' : ''}`;
+
+    const detailModeOptions = formData.type === 'Amount' ? ['Flat'] : ['Flat', 'Upto'];
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-[12px]" onClick={onClose} />
 
-            <div className="relative bg-white w-full max-w-[460px] rounded-[32px] shadow-2xl overflow-visible animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
-                <div className="p-8">
+            <div className="relative bg-white w-full max-w-[400px] h-[696px] max-h-[calc(100vh-32px)] rounded-[24px] shadow-2xl overflow-visible animate-in fade-in zoom-in duration-200">
+                <div className="px-8 pt-8 pb-7">
                     {/* Close button */}
                     <button onClick={onClose} className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-400">
                         <X size={16} />
                     </button>
 
                     {/* Header */}
-                    <div className="flex items-center gap-3 mb-8">
+                    <div className="flex items-center gap-3 mb-5">
                         <div className="w-10 h-10 rounded-full bg-[#FFF5F5] flex items-center justify-center">
                             <Ticket className="text-primary" size={20} />
                         </div>
@@ -132,7 +134,7 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
                     </div>
 
                     {/* Form */}
-                    <div className="space-y-5">
+                    <div className="space-y-3">
                         {/* Name */}
                         <Field label="Coupon Name" error={errors.name}>
                             <input
@@ -147,32 +149,44 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
                         {/* Type Toggle */}
                         <div>
                             <label className="block text-[13px] font-bold text-dark/80 mb-2">Coupon Type</label>
-                            <div className="flex bg-[#F5F7F9] p-1 rounded-[16px]">
+                            <div className="flex gap-3">
                                 {['Amount', 'Percentage'].map(t => (
                                     <button
                                         key={t}
                                         type="button"
-                                        onClick={() => setField('type', t)}
-                                        className={`flex-1 py-2.5 rounded-[12px] text-[13.5px] font-bold transition-all ${formData.type === t ? 'bg-white text-primary shadow-sm' : 'text-gray-400'}`}
+                                        onClick={() => {
+                                            setField('type', t);
+                                            if (t === 'Amount') setField('detailsHeader', 'Flat');
+                                        }}
+                                        className={`flex-1 h-[48px] rounded-[16px] text-[13.5px] font-bold transition-all border ${formData.type === t ? 'bg-white text-primary border-primary' : 'bg-[#F5F7F9] text-gray-400 border-transparent'}`}
                                     >
-                                        {t} {t === 'Amount' ? '(₹)' : '(%)'}
+                                        {t}
                                     </button>
                                 ))}
                             </div>
                         </div>
 
-                        {/* Discount Value */}
-                        <Field label={`Discount ${formData.type === 'Amount' ? 'Amount (₹)' : 'Percentage (%)'}`} error={errors.detailsValue}>
-                            <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[14px] font-medium">
-                                    {formData.type === 'Amount' ? '₹' : '%'}
-                                </span>
+                        {/* Coupon Details */}
+                        <Field label="Coupon Details" error={errors.detailsValue}>
+                            <div className="flex gap-3">
+                                <div className="relative w-[120px]">
+                                    <select
+                                        value={formData.detailsHeader}
+                                        onChange={(e) => setField('detailsHeader', e.target.value)}
+                                        className={`${inputCls(false)} appearance-none cursor-pointer`}
+                                    >
+                                        {detailModeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                        <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="#939393" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                    </div>
+                                </div>
                                 <input
                                     type="number"
                                     min="0"
                                     max={formData.type === 'Percentage' ? '100' : undefined}
-                                    placeholder={formData.type === 'Amount' ? '500' : '20'}
-                                    className={`${inputCls(!!errors.detailsValue)} pl-8`}
+                                    placeholder={formData.type === 'Amount' ? '₹500' : '20'}
+                                    className={`${inputCls(!!errors.detailsValue)} flex-1`}
                                     value={formData.detailsValue}
                                     onChange={(e) => setField('detailsValue', e.target.value)}
                                 />
@@ -180,7 +194,7 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
                         </Field>
 
                         {/* Min Purchase */}
-                        <Field label="Minimum Purchase Amount (₹)  — optional" error={errors.minPurchase}>
+                        <Field label="Minimum Purchase Amount" error={errors.minPurchase}>
                             <div className="relative">
                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[14px] font-medium">₹</span>
                                 <input
@@ -195,7 +209,7 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
                         </Field>
 
                         {/* Usage Limit */}
-                        <Field label="Usage Limit — optional" error={errors.usageLimit}>
+                        <Field label="Coupon Usage Limit" error={errors.usageLimit}>
                             <input
                                 type="number"
                                 min="1"
@@ -218,15 +232,17 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
                                         // Clear end date error if start changes
                                         setErrors(prev => ({ ...prev, endDate: '' }));
                                     }}
+                                    minDate={todayISO}
                                     maxDate={formData.endDate || undefined}
                                     error={errors.startDate}
                                 />
                             </div>
                             <div className="flex-1">
                                 <DatePicker
-                                    label="End Date — optional"
+                                    label="End Date"
                                     value={formData.endDate}
                                     onChange={(v) => setField('endDate', v)}
+                                    disabled={!formData.startDate}
                                     minDate={formData.startDate ? (() => {
                                         const d = new Date(formData.startDate);
                                         d.setDate(d.getDate() + 1);
@@ -239,15 +255,15 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
                     </div>
 
                     {/* Footer */}
-                    <div className="flex gap-4 mt-8">
+                    <div className="flex gap-3 mt-5">
                         <button onClick={onClose}
-                            className="flex-1 py-4 bg-[#F5F7F9] hover:bg-[#EEF1F4] text-gray-500 font-bold rounded-[18px] transition-all">
+                            className="flex-1 h-[48px] bg-[#F5F7F9] hover:bg-[#EEF1F4] text-gray-500 font-bold rounded-[16px] transition-all">
                             Cancel
                         </button>
                         <button
                             onClick={handleSubmit}
                             disabled={submitting}
-                            className="flex-[1.5] py-4 bg-primary hover:bg-primary/95 text-white font-bold rounded-[18px] shadow-lg shadow-primary/20 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="flex-1 h-[48px] bg-primary hover:bg-primary/95 text-white font-bold rounded-[16px] shadow-lg shadow-primary/20 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             {submitting ? 'Saving...' : mode === 'edit' ? 'Save Coupon' : 'Create Coupon'}
                         </button>

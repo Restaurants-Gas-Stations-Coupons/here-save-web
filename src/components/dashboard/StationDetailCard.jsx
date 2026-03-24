@@ -2,19 +2,21 @@ import React from 'react';
 import { Edit, Utensils } from 'lucide-react';
 
 const StatusBadge = ({ status }) => {
-    const isActive = status === 'Active';
+    const normalizedStatus = String(status || '').toUpperCase();
+    const isActive = normalizedStatus === 'ACTIVE';
+    const displayStatus = status || 'UNKNOWN';
     return (
         <span
             className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full ${isActive ? 'bg-[#E8F5E9] text-green-600' : 'bg-red-50 text-red-500'
                 }`}
         >
             <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-green-500' : 'bg-red-400'}`} />
-            {status}
+            {displayStatus}
         </span>
     );
 };
 
-const StationDetailCard = ({ data, role, onEdit, entityType = 'station' }) => {
+const StationDetailCard = ({ data, role, onEdit, onDeactivate, entityType = 'station' }) => {
     const isRestaurant = entityType === 'restaurant';
     const entityName = isRestaurant ? 'Restaurant' : 'Station';
 
@@ -40,10 +42,14 @@ const StationDetailCard = ({ data, role, onEdit, entityType = 'station' }) => {
                             Edit
                         </button>
                         <button
+                            onClick={onDeactivate}
+                            disabled={String(data.status || '').toUpperCase() === 'DEACTIVATED'}
                             className="flex items-center gap-2 px-4 py-2 border border-[#FFDADA] bg-white rounded-[12px] text-[13px] font-semibold text-[#DC0004] hover:bg-[#FFF5F5] transition-all"
                         >
                             <span className="w-1.5 h-1.5 rounded-full bg-[#DC0004]" />
-                            Deactivate {entityName}
+                            {String(data.status || '').toUpperCase() === 'DEACTIVATED'
+                                ? `${entityName} Deactivated`
+                                : `Deactivate ${entityName}`}
                         </button>
                     </div>
                 )}

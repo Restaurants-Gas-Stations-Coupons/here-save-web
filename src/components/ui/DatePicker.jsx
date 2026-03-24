@@ -17,12 +17,13 @@ const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
  *   error       – string (validation message)
  *   label       – string
  */
-const DatePicker = ({ value, onChange, placeholder = 'Select date', minDate, maxDate, error, label, className = '' }) => {
+const DatePicker = ({ value, onChange, placeholder = 'Select date', minDate, maxDate, error, label, className = '', disabled = false }) => {
     const today = new Date();
     const parseDate = (str) => str ? new Date(str + 'T00:00:00') : null;
     const selected = parseDate(value);
 
     const [open, setOpen] = useState(false);
+    const [popupPlacement, setPopupPlacement] = useState({ vertical: 'down', align: 'left' });
     const [viewYear, setViewYear] = useState(selected ? selected.getFullYear() : today.getFullYear());
     const [viewMonth, setViewMonth] = useState(selected ? selected.getMonth() : today.getMonth());
     const ref = useRef(null);
@@ -33,6 +34,29 @@ const DatePicker = ({ value, onChange, placeholder = 'Select date', minDate, max
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
+
+    useEffect(() => {
+        if (!open || !ref.current) return;
+
+        const calculatePlacement = () => {
+            const rect = ref.current.getBoundingClientRect();
+            const popupWidth = 280;
+            const popupHeight = 320;
+            const gap = 8;
+
+            const vertical = rect.bottom + gap + popupHeight > window.innerHeight ? 'up' : 'down';
+            const align = rect.left + popupWidth > window.innerWidth ? 'right' : 'left';
+            setPopupPlacement({ vertical, align });
+        };
+
+        calculatePlacement();
+        window.addEventListener('resize', calculatePlacement);
+        window.addEventListener('scroll', calculatePlacement, true);
+        return () => {
+            window.removeEventListener('resize', calculatePlacement);
+            window.removeEventListener('scroll', calculatePlacement, true);
+        };
+    }, [open]);
 
     // Compute days in the grid
     const firstDay = new Date(viewYear, viewMonth, 1).getDay();
@@ -65,8 +89,9 @@ const DatePicker = ({ value, onChange, placeholder = 'Select date', minDate, max
             {label && <label className="block text-[13px] font-bold text-dark/80 mb-2">{label}</label>}
             <button
                 type="button"
-                onClick={() => setOpen(o => !o)}
-                className={`w-full flex items-center justify-between bg-[#F5F7F9] rounded-[16px] px-4 py-3.5 text-[14px] transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 ${error ? 'ring-2 ring-red-400' : ''}`}
+                onClick={() => { if (!disabled) setOpen(o => !o); }}
+                disabled={disabled}
+                className={`w-full h-[48px] flex items-center justify-between bg-[#F5F7F9] rounded-[16px] px-4 text-[14px] transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 ${disabled ? 'opacity-60 cursor-not-allowed' : ''} ${error ? 'ring-2 ring-red-400' : ''}`}
             >
                 <span className={displayValue ? 'text-dark' : 'text-gray-400'}>
                     {displayValue || placeholder}
@@ -76,8 +101,13 @@ const DatePicker = ({ value, onChange, placeholder = 'Select date', minDate, max
             {error && <p className="mt-1 text-[12px] text-red-500 ml-1">{error}</p>}
 
             {open && (
-                <div className="absolute z-[200] mt-2 bg-white rounded-[20px] shadow-2xl shadow-black/10 border border-gray-100 p-4 w-[280px] animate-in fade-in zoom-in-95 duration-150"
-                    style={{ left: 0 }}>
+                <div
+                    className="absolute z-[200] bg-white rounded-[20px] shadow-2xl shadow-black/10 border border-gray-100 p-4 w-[280px] animate-in fade-in zoom-in-95 duration-150"
+                    style={{
+                        ...(popupPlacement.vertical === 'down' ? { top: 'calc(100% + 8px)' } : { bottom: 'calc(100% + 8px)' }),
+                        ...(popupPlacement.align === 'left' ? { left: 0 } : { right: 0 }),
+                    }}
+                >
                     {/* Header */}
                     <div className="flex items-center justify-between mb-4">
                         <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors">

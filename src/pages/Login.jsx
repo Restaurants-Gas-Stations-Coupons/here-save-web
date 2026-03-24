@@ -106,7 +106,7 @@ const Login = ({ onLoginSuccess }) => {
         const mappedRole = backendRole === 'SUPER_ADMIN' ? 'superadmin' : 'admin';
 
         setIsOtpOpen(false);
-        if (onLoginSuccess) onLoginSuccess(mappedRole);
+        if (onLoginSuccess) onLoginSuccess(mappedRole, user);
       } catch (apiError) {
         const message = apiError?.message || 'Login failed. Please try again.';
         setVerifyError(message);
