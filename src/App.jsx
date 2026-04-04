@@ -7,6 +7,7 @@ import StaffMembers from './pages/StaffMembers';
 import { fetchCurrentUser } from './services/authService';
 import ToastHost from './components/ui/ToastHost';
 
+/** Client-side “pages” only — no browser full reload when switching dashboard / coupons / staff. */
 function App() {
   const [page, setPage] = useState('login');
   const [userRole, setUserRole] = useState(null); // 'admin' | 'superadmin'
@@ -25,7 +26,7 @@ function App() {
         setCurrentUser(user || null);
         setUserRole(mappedRole);
         setPage('dashboard');
-      } catch (error) {
+      } catch {
         // Token is invalid/expired; clear it so we don't loop on errors
         window.localStorage.removeItem('accessToken');
         window.localStorage.removeItem('refreshToken');

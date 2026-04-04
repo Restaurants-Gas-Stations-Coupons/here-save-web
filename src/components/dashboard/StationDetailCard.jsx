@@ -77,6 +77,14 @@ const StationDetailCard = ({ data, role, onEdit, onDeactivate, entityType = 'sta
                     <p className="text-[11px] text-grayCustom mb-1">Contact</p>
                     <p className="text-[13px] font-semibold text-dark">{data.contact}</p>
                 </div>
+                {(data.latitude != null && data.latitude !== '' && data.longitude != null && data.longitude !== '') && (
+                    <div>
+                        <p className="text-[11px] text-grayCustom mb-1">Location</p>
+                        <p className="text-[13px] font-semibold text-dark font-mono tabular-nums">
+                            {Number(data.latitude).toFixed(7)}, {Number(data.longitude).toFixed(7)}
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

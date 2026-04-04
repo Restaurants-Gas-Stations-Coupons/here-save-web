@@ -98,12 +98,13 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
     const [transactionHistory, setTransactionHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
-    const [error, setError] = useState('');
+    const [, setError] = useState('');
 
     const isRestaurants = activeNav === 'restaurants';
 
-    // Load outlets
-    const loadOutlets = useCallback(async () => {
+    // Load outlets — optional selectOutletId keeps the user on the same outlet after save (no “full reset”).
+    const loadOutlets = useCallback(async (opts = {}) => {
+        const { resetIndex = false, selectOutletId = null } = opts;
         try {
             const params = isRestaurants ? { type: 'RESTAURANT' } : { type: 'PETROL' };
             const res = await fetchOutlets(params);
@@ -112,13 +113,23 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
                 ? list.filter(o => o.type === 'RESTAURANT')
                 : list.filter(o => o.type === 'PETROL');
             setOutlets(filtered);
-            setCurrentIndex(0);
+            if (selectOutletId != null && selectOutletId !== '') {
+                const idx = filtered.findIndex((o) => String(o.id) === String(selectOutletId));
+                setCurrentIndex(idx >= 0 ? idx : 0);
+            } else if (resetIndex) {
+                setCurrentIndex(0);
+            } else {
+                setCurrentIndex((prev) => {
+                    if (filtered.length === 0) return 0;
+                    return Math.min(prev, filtered.length - 1);
+                });
+            }
         } catch (err) {
             setError(err.message || 'Failed to load outlets');
         }
     }, [isRestaurants]);
 
-    useEffect(() => { loadOutlets(); }, [loadOutlets]);
+    useEffect(() => { loadOutlets({ resetIndex: true }); }, [loadOutlets]);
 
     // Load dashboard data for current outlet
     const loadDashboardData = useCallback(async () => {
@@ -223,17 +234,20 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
                 state: formData.state,
                 manager_name: formData.managerName,
                 manager_phone: formData.managerPhone,
+                latitude: formData.latitude,
+                longitude: formData.longitude,
                 type: isRestaurants ? 'RESTAURANT' : 'PETROL',
             };
+            let focusId = stationToEdit?.outletId ?? stationToEdit?.id ?? null;
             if (stationToEdit) {
                 await updateOutlet(stationToEdit.outletId || stationToEdit.id, payload);
             } else {
-                await createOutlet(payload);
+                const created = await createOutlet(payload);
+                focusId = created?.id ?? focusId;
             }
             setIsAddStationOpen(false);
             setStationToEdit(null);
-            await loadOutlets();
-            setCurrentIndex(0);
+            await loadOutlets({ selectOutletId: focusId });
         } catch (err) {
             setError(err.message || 'Failed to save outlet');
         } finally {
@@ -249,7 +263,7 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
         try {
             await updateOutlet(outletId, { status: 'DEACTIVATED' });
             setConfirmDeactivateOpen(false);
-            await loadOutlets();
+            await loadOutlets({ resetIndex: false });
         } catch (err) {
             setError(err.message || 'Failed to deactivate outlet');
         } finally {
@@ -284,6 +298,8 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
         outletId: currentEntityObj.id,
         manager: currentEntityObj.manager_name || 'N/A',
         contact: currentEntityObj.manager_phone || 'N/A',
+        latitude: currentEntityObj.latitude,
+        longitude: currentEntityObj.longitude,
     };
 
     return (

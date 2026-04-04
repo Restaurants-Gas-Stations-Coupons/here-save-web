@@ -12,6 +12,10 @@ const Field = ({ label, error, children }) => (
     </div>
 );
 
+/** Matches backend defaults (Android emulator / Mountain View area). */
+const DEFAULT_LATITUDE = 37.4219983;
+const DEFAULT_LONGITUDE = -122.084;
+
 const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityType = 'station' }) => {
     const cities = ['Hyderabad', 'Bangalore', 'Mumbai', 'Delhi', 'Chennai', 'Pune'];
     const states = ['Telangana', 'Karnataka', 'Maharashtra', 'Delhi', 'Tamil Nadu'];
@@ -23,6 +27,8 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
         state: 'Telangana',
         managerName: '',
         managerPhone: '',
+        latitude: String(DEFAULT_LATITUDE),
+        longitude: String(DEFAULT_LONGITUDE),
     };
 
     const [formData, setFormData] = useState(emptyForm);
@@ -41,8 +47,16 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
                     address: station.address || '',
                     city: station.city,
                     state: station.state,
-                    managerName: station.manager_name ,
-                    managerPhone: station.manager_phone ,
+                    managerName: station.manager_name,
+                    managerPhone: station.manager_phone,
+                    latitude:
+                        station.latitude != null && station.latitude !== ''
+                            ? String(station.latitude)
+                            : String(DEFAULT_LATITUDE),
+                    longitude:
+                        station.longitude != null && station.longitude !== ''
+                            ? String(station.longitude)
+                            : String(DEFAULT_LONGITUDE),
                 });
             } else {
                 setFormData(emptyForm);
@@ -75,15 +89,26 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
         else if (!/^\+?[0-9]{10,15}$/.test(formData.managerPhone.replace(/\s/g, '')))
             e.managerPhone = 'Enter a valid phone number (10–15 digits).';
 
+        const lat = parseFloat(String(formData.latitude).trim().replace(',', '.'));
+        const lng = parseFloat(String(formData.longitude).trim().replace(',', '.'));
+        if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+            e.latitude = 'Enter a valid latitude (-90 to 90).';
+        }
+        if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+            e.longitude = 'Enter a valid longitude (-180 to 180).';
+        }
+
         return e;
     };
 
     const handleSubmit = async () => {
         const e = validate();
         if (Object.keys(e).length > 0) { setErrors(e); return; }
+        const lat = parseFloat(String(formData.latitude).trim().replace(',', '.'));
+        const lng = parseFloat(String(formData.longitude).trim().replace(',', '.'));
         setSubmitting(true);
         try {
-            await onSave(formData);
+            await onSave({ ...formData, latitude: lat, longitude: lng });
         } finally {
             setSubmitting(false);
         }
@@ -181,12 +206,42 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
                                 placeholder="+91 98765 43210"
                                 value={formData.managerPhone}
                                 onChange={(e) => {
-                                    const v = e.target.value.replace(/[^\d+\s\-]/g, '');
+                                    const v = e.target.value.replace(/[^\d+\s-]/g, '');
                                     setField('managerPhone', v);
                                 }}
                                 className={inputCls(!!errors.managerPhone)}
                             />
                         </Field>
+
+                        <div className="flex gap-4">
+                            <div className="flex-1 min-w-0">
+                                <Field label="Latitude *" error={errors.latitude}>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        placeholder={String(DEFAULT_LATITUDE)}
+                                        value={formData.latitude}
+                                        onChange={(e) => setField('latitude', e.target.value)}
+                                        className={inputCls(!!errors.latitude)}
+                                    />
+                                </Field>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <Field label="Longitude *" error={errors.longitude}>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        placeholder={String(DEFAULT_LONGITUDE)}
+                                        value={formData.longitude}
+                                        onChange={(e) => setField('longitude', e.target.value)}
+                                        className={inputCls(!!errors.longitude)}
+                                    />
+                                </Field>
+                            </div>
+                        </div>
+                        <p className="text-[11px] text-gray-400 -mt-2 ml-1">
+                            Defaults match Android emulator (Mountain View). Adjust for the real site.
+                        </p>
                     </div>
 
                     {/* Footer */}
