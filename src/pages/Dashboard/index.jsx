@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import StationDetailCard from '../../components/dashboard/StationDetailCard';
@@ -99,6 +99,7 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [, setError] = useState('');
+    const saveOutletInFlightRef = useRef(false);
 
     const isRestaurants = activeNav === 'restaurants';
 
@@ -224,6 +225,8 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
     };
 
     const handleSaveStation = async (formData) => {
+        if (saveOutletInFlightRef.current) return;
+        saveOutletInFlightRef.current = true;
         setActionLoading(true);
         setError('');
         try {
@@ -234,6 +237,9 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
                 state: formData.state,
                 manager_name: formData.managerName,
                 manager_phone: formData.managerPhone,
+                outlet_images: Array.isArray(formData.imagesBase64)
+                    ? formData.imagesBase64.slice(0, 4)
+                    : undefined,
                 latitude: formData.latitude,
                 longitude: formData.longitude,
                 type: isRestaurants ? 'RESTAURANT' : 'PETROL',
@@ -251,6 +257,7 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
         } catch (err) {
             setError(err.message || 'Failed to save outlet');
         } finally {
+            saveOutletInFlightRef.current = false;
             setActionLoading(false);
         }
     };
@@ -298,6 +305,9 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
         outletId: currentEntityObj.id,
         manager: currentEntityObj.manager_name || 'N/A',
         contact: currentEntityObj.manager_phone || 'N/A',
+        outletImages: Array.isArray(currentEntityObj.outlet_images)
+            ? currentEntityObj.outlet_images
+            : [],
         latitude: currentEntityObj.latitude,
         longitude: currentEntityObj.longitude,
     };

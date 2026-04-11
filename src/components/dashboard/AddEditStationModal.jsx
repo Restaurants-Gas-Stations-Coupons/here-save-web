@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Fuel, Utensils } from 'lucide-react';
 
 const Field = ({ label, error, children }) => (
@@ -15,6 +15,17 @@ const Field = ({ label, error, children }) => (
 /** Matches backend defaults (Android emulator / Mountain View area). */
 const DEFAULT_LATITUDE = 37.4219983;
 const DEFAULT_LONGITUDE = -122.084;
+const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_COUNT = 4;
+
+function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read image'));
+        reader.readAsDataURL(file);
+    });
+}
 
 const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityType = 'station' }) => {
     const cities = ['Hyderabad', 'Bangalore', 'Mumbai', 'Delhi', 'Chennai', 'Pune'];
@@ -27,6 +38,7 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
         state: 'Telangana',
         managerName: '',
         managerPhone: '',
+        imagesBase64: [],
         latitude: String(DEFAULT_LATITUDE),
         longitude: String(DEFAULT_LONGITUDE),
     };
@@ -34,21 +46,27 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
     const [formData, setFormData] = useState(emptyForm);
     const [errors, setErrors] = useState({});
     const [submitting, setSubmitting] = useState(false);
+    /** Blocks a second click before React re-renders `disabled` on the button. */
+    const submitLockRef = useRef(false);
 
     const isRestaurant = entityType === 'restaurant';
     const entityName = isRestaurant ? 'Restaurant' : 'Petrol Station';
+    const asText = (v) => (v == null ? '' : String(v));
 
     useEffect(() => {
         if (isOpen) {
             setErrors({});
             if (station) {
                 setFormData({
-                    name: station.name || '',
-                    address: station.address || '',
-                    city: station.city,
-                    state: station.state,
-                    managerName: station.manager_name,
-                    managerPhone: station.manager_phone,
+                    name: asText(station.name),
+                    address: asText(station.address),
+                    city: asText(station.city) || cities[0],
+                    state: asText(station.state) || states[0],
+                    managerName: asText(station.manager_name),
+                    managerPhone: asText(station.manager_phone),
+                    imagesBase64: Array.isArray(station.outlet_images)
+                        ? station.outlet_images.slice(0, MAX_IMAGE_COUNT)
+                        : [],
                     latitude:
                         station.latitude != null && station.latitude !== ''
                             ? String(station.latitude)
@@ -74,20 +92,32 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
 
     const validate = () => {
         const e = {};
-        if (!formData.name.trim()) e.name = `${entityName} name is required.`;
-        else if (formData.name.trim().length < 3) e.name = 'Name must be at least 3 characters.';
+        const name = asText(formData.name).trim();
+        const address = asText(formData.address).trim();
+        const managerName = asText(formData.managerName).trim();
+        const managerPhone = asText(formData.managerPhone).trim();
+        if (!name) e.name = `${entityName} name is required.`;
+        else if (name.length < 3) e.name = 'Name must be at least 3 characters.';
 
-        if (!formData.address.trim()) e.address = 'Address is required.';
-        else if (formData.address.trim().length < 10) e.address = 'Please enter a more complete address.';
+        if (!address) e.address = 'Address is required.';
+        else if (address.length < 10) e.address = 'Please enter a more complete address.';
 
         if (!formData.city) e.city = 'City is required.';
         if (!formData.state) e.state = 'State is required.';
 
-        if (!formData.managerName.trim()) e.managerName = 'Manager name is required.';
+        if (!managerName) e.managerName = 'Manager name is required.';
 
-        if (!formData.managerPhone.trim()) e.managerPhone = 'Manager phone is required.';
-        else if (!/^\+?[0-9]{10,15}$/.test(formData.managerPhone.replace(/\s/g, '')))
+        if (!managerPhone) e.managerPhone = 'Manager phone is required.';
+        else if (!/^\+?[0-9]{10,15}$/.test(managerPhone.replace(/\s/g, '')))
             e.managerPhone = 'Enter a valid phone number (10–15 digits).';
+        if (Array.isArray(formData.imagesBase64) && formData.imagesBase64.length > MAX_IMAGE_COUNT) {
+            e.imagesBase64 = `Maximum ${MAX_IMAGE_COUNT} images are allowed.`;
+        }
+        if ((formData.imagesBase64 || []).some(
+            (img) => !/^data:image\/(png|jpe?g|webp);base64,/i.test(String(img || ''))
+        )) {
+            e.imagesBase64 = 'All images must be PNG, JPG, JPEG, or WEBP.';
+        }
 
         const lat = parseFloat(String(formData.latitude).trim().replace(',', '.'));
         const lng = parseFloat(String(formData.longitude).trim().replace(',', '.'));
@@ -104,18 +134,22 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
     const handleSubmit = async () => {
         const e = validate();
         if (Object.keys(e).length > 0) { setErrors(e); return; }
+        if (submitLockRef.current) return;
+        submitLockRef.current = true;
         const lat = parseFloat(String(formData.latitude).trim().replace(',', '.'));
         const lng = parseFloat(String(formData.longitude).trim().replace(',', '.'));
         setSubmitting(true);
         try {
             await onSave({ ...formData, latitude: lat, longitude: lng });
         } finally {
+            submitLockRef.current = false;
             setSubmitting(false);
         }
     };
 
     const inputCls = (hasError) =>
         `w-full px-5 py-3.5 bg-[#F4F4F4] border rounded-[16px] text-[14px] focus:bg-white focus:outline-none focus:border-primary/20 transition-all placeholder:text-gray-400 ${hasError ? 'border-red-400 ring-2 ring-red-100' : 'border-transparent'}`;
+    const imagePreview = Array.isArray(formData.imagesBase64) ? formData.imagesBase64 : [];
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -213,6 +247,67 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
                             />
                         </Field>
 
+                        <Field label={`${entityName} Images (max ${MAX_IMAGE_COUNT})`} error={errors.imagesBase64}>
+                            <input
+                                type="file"
+                                multiple
+                                accept="image/png,image/jpeg,image/jpg,image/webp"
+                                className={inputCls(!!errors.imagesBase64)}
+                                onChange={async (e) => {
+                                    const selected = Array.from(e.target.files || []);
+                                    if (selected.length === 0) return;
+                                    const nextCount = (formData.imagesBase64?.length || 0) + selected.length;
+                                    if (nextCount > MAX_IMAGE_COUNT) {
+                                        setErrors(prev => ({
+                                            ...prev,
+                                            imagesBase64: `You can upload maximum ${MAX_IMAGE_COUNT} images.`,
+                                        }));
+                                        return;
+                                    }
+                                    try {
+                                        const tooLarge = selected.find((file) => file.size > MAX_IMAGE_SIZE_BYTES);
+                                        if (tooLarge) {
+                                            setErrors(prev => ({
+                                                ...prev,
+                                                imagesBase64: 'Each image size should be 2MB or less.',
+                                            }));
+                                            return;
+                                        }
+                                        const dataUrls = await Promise.all(selected.map((file) => fileToDataUrl(file)));
+                                        setField('imagesBase64', [...(formData.imagesBase64 || []), ...dataUrls]);
+                                    } catch (err) {
+                                        setErrors(prev => ({
+                                            ...prev,
+                                            imagesBase64: err.message || 'Failed to process images.',
+                                        }));
+                                    }
+                                }}
+                            />
+                            {imagePreview.length > 0 && (
+                                <div className="mt-2 rounded-[12px] border border-[#ECECEC] bg-[#FAFAFA] p-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {imagePreview.map((img, idx) => (
+                                            <div key={`${idx}-${img.slice(0, 24)}`} className="relative">
+                                                <img
+                                                    src={img}
+                                                    alt={`Outlet preview ${idx + 1}`}
+                                                    className="w-full h-24 object-cover rounded-[8px]"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setField('imagesBase64', imagePreview.filter((_, i) => i !== idx))}
+                                                    className="absolute top-1.5 right-1.5 text-white bg-black/55 rounded-full w-6 h-6 text-xs"
+                                                    aria-label={`Remove image ${idx + 1}`}
+                                                >
+                                                    x
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </Field>
+
                         <div className="flex gap-4">
                             <div className="flex-1 min-w-0">
                                 <Field label="Latitude *" error={errors.latitude}>
@@ -246,11 +341,12 @@ const AddEditStationModal = ({ isOpen, onClose, onSave, station = null, entityTy
 
                     {/* Footer */}
                     <div className="flex w-full gap-4 mt-8">
-                        <button onClick={onClose}
+                        <button type="button" onClick={onClose}
                             className="flex-1 h-[48px] rounded-[16px] bg-[#F4F4F4] text-[#2E2E2E] font-medium text-[16px] hover:bg-[#E5E5E5] transition-colors">
                             Cancel
                         </button>
                         <button
+                            type="button"
                             onClick={handleSubmit}
                             disabled={submitting}
                             className="flex-1 h-[48px] rounded-[16px] bg-[#DC0004] text-white font-medium text-[16px] hover:opacity-95 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"

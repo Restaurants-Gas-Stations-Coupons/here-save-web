@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { Edit, Utensils } from 'lucide-react';
 
 const StatusBadge = ({ status }) => {
@@ -19,6 +19,9 @@ const StatusBadge = ({ status }) => {
 const StationDetailCard = ({ data, role, onEdit, onDeactivate, entityType = 'station' }) => {
     const isRestaurant = entityType === 'restaurant';
     const entityName = isRestaurant ? 'Restaurant' : 'Station';
+    const images = Array.isArray(data.outletImages) ? data.outletImages.filter(Boolean) : [];
+    const scrollRef = useRef(null);
+    const [activeSlide, setActiveSlide] = useState(0);
 
     return (
         <div className="bg-white rounded-[16px] px-6 py-5">
@@ -62,6 +65,43 @@ const StationDetailCard = ({ data, role, onEdit, onDeactivate, entityType = 'sta
             </div>
 
             <p className="text-[13px] text-grayCustom mb-4">{data.address}</p>
+
+            {images.length > 0 && (
+                <div className="mb-4">
+                    <div
+                        ref={scrollRef}
+                        className="flex gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar"
+                        onScroll={(e) => {
+                            const node = e.currentTarget;
+                            const width = node.clientWidth;
+                            if (!width) return;
+                            const next = Math.round(node.scrollLeft / width);
+                            if (next !== activeSlide) setActiveSlide(next);
+                        }}
+                    >
+                        {images.map((img, idx) => (
+                            <div key={`${idx}-${img.slice(0, 24)}`} className="min-w-full snap-start">
+                                <img
+                                    src={img}
+                                    alt={`${entityName} ${idx + 1}`}
+                                    className="w-full h-[180px] object-cover rounded-[12px] border border-[#EEEEEE]"
+                                    draggable={false}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    {images.length > 1 && (
+                        <div className="flex items-center justify-center gap-1.5 mt-2">
+                            {images.map((_, idx) => (
+                                <span
+                                    key={`dot-${idx}`}
+                                    className={`w-1.5 h-1.5 rounded-full ${idx === activeSlide ? 'bg-[#DC0004]' : 'bg-[#D1D5DB]'}`}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Meta row */}
             <div className="bg-[#F3F7FA] rounded-[12px] px-5 py-3.5 flex gap-12 flex-wrap">
