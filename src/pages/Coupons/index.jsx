@@ -1,15 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import CouponCard from '../../components/dashboard/CouponCard';
 import AddCouponModal from '../../components/dashboard/AddCouponModal';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { sidebarData, superadminSidebarData } from '../../constants/layoutData';
 import { Plus, Ticket, Fuel, Utensils } from 'lucide-react';
-import { fetchCoupons, createCoupon, updateCoupon, approveCoupon, rejectCoupon, deleteCoupon } from '../../services/couponService';
-import { fetchOutlets } from '../../services/dashboardService';
 import CustomSelect from '../../components/ui/CustomSelect';
+import { useCouponMutations, useCouponsQuery, useOutletsQuery } from '../../query/useAppQueries';
 
-const mapCoupon = (c) => {
+const currencySymbolForOutletType = (outletType) => {
+    const t = `${outletType || ''}`.toUpperCase();
+    if (t === 'PETROL' || t.includes('PETROL') || t === 'GAS' || t.includes('GAS_STATION')) {
+        return '₹';
+    }
+    return '$';
+};
+
+const mapCoupon = (c, outletType) => {
     let statusLabel = 'Approved';
     if (c.status === 'PENDING_APPROVAL') statusLabel = 'Pending';
     if (c.status === 'REJECTED') statusLabel = 'Rejected';
@@ -17,7 +24,7 @@ const mapCoupon = (c) => {
     const discountValue = parseFloat(c.discount_value || 0);
     let discountStr;
     if (c.coupon_type === 'PERCENTAGE') discountStr = `${discountValue}%`;
-    else discountStr = `₹${discountValue}`;
+    else discountStr = `${currencySymbolForOutletType(outletType)}${discountValue}`;
 
     return {
         id: c.id,
@@ -47,11 +54,8 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
     const [modalData, setModalData] = useState(null);
     const [currentLocationIndex, setCurrentLocationIndex] = useState(0);
 
-    const [coupons, setCoupons] = useState([]);
-    const [outlets, setOutlets] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
-    const [error, setError] = useState('');
+    const [, setError] = useState('');
     const [confirmState, setConfirmState] = useState({
         isOpen: false,
         title: '',
@@ -60,47 +64,38 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
         tone: 'danger',
         onConfirm: null,
     });
+    const outletsQuery = useOutletsQuery(userRole === 'superadmin' ? {} : { type: 'PETROL' });
+    const outlets = useMemo(() => outletsQuery.data || [], [outletsQuery.data]);
     const selectedOutlet = outlets[currentLocationIndex] || null;
-
-    const loadCoupons = useCallback(async () => {
-        setLoading(true);
-        setError('');
-        try {
-            const params = {};
-            if (userRole === 'superadmin' && outlets.length > 0 && outlets[currentLocationIndex]) {
-                params.outlet_id = outlets[currentLocationIndex].id;
-            }
-            const coupData = await fetchCoupons(params);
-            const rawCoupons = Array.isArray(coupData?.data) ? coupData.data
-                : Array.isArray(coupData) ? coupData : [];
-            setCoupons(rawCoupons.map(mapCoupon));
-        } catch (err) {
-            setError(err.message || 'Failed to load coupons');
-        } finally {
-            setLoading(false);
+    const couponParams = useMemo(() => {
+        if (userRole === 'superadmin' && selectedOutlet) {
+            return { outlet_id: selectedOutlet.id };
         }
-    }, [userRole, outlets, currentLocationIndex]);
+        return {};
+    }, [userRole, selectedOutlet]);
+    const couponsQuery = useCouponsQuery(couponParams);
+    const coupons = useMemo(
+        () => (couponsQuery.data || []).map((c) => mapCoupon(c, selectedOutlet?.type)),
+        [couponsQuery.data, selectedOutlet?.type],
+    );
+    const loading = outletsQuery.isLoading || couponsQuery.isLoading;
+    const couponMutations = useCouponMutations();
 
     useEffect(() => {
-        // Load outlets for all roles so outlet_id is always available for coupon creation
-        const loadOutlets = async () => {
-            try {
-                const res = await fetchOutlets(userRole === 'superadmin' ? {} : { type: 'PETROL' });
-                const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-                setOutlets(list);
-                if (list.length > 0) {
-                    setCurrentLocationIndex((prev) => (prev >= 0 && prev < list.length ? prev : 0));
-                } else {
-                    setCurrentLocationIndex(0);
-                }
-            } catch {/* ignore */ }
-        };
-        loadOutlets();
-    }, [userRole]);
+        if (!outlets.length) {
+            setCurrentLocationIndex(0);
+            return;
+        }
+        setCurrentLocationIndex((prev) => (prev >= 0 && prev < outlets.length ? prev : 0));
+    }, [outlets]);
 
     useEffect(() => {
-        loadCoupons();
-    }, [loadCoupons]);
+        if (outletsQuery.error) {
+            setError(outletsQuery.error.message || 'Failed to load outlets');
+        } else if (couponsQuery.error) {
+            setError(couponsQuery.error.message || 'Failed to load coupons');
+        }
+    }, [outletsQuery.error, couponsQuery.error]);
 
     const handleNavChange = (navId) => {
         setActiveNav(navId);
@@ -159,10 +154,9 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
                 setActionLoading(true);
                 setError('');
                 try {
-                    await deleteCoupon(id);
+                    await couponMutations.deleteCoupon.mutateAsync(id);
                     setSelectedId(null);
                     closeConfirm();
-                    await loadCoupons();
                 } catch (err) {
                     setError(err.message || 'Failed to delete coupon');
                 } finally {
@@ -210,14 +204,13 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
                 end_date: parseDateToISO(formData.endDate),
             };
             if (modalMode === 'edit' && modalData?.id) {
-                await updateCoupon(modalData.id, payload);
+                await couponMutations.updateCoupon.mutateAsync({ id: modalData.id, data: payload });
             } else {
-                await createCoupon(payload);
+                await couponMutations.createCoupon.mutateAsync(payload);
             }
             setIsModalOpen(false);
             setModalData(null);
             setModalMode('add');
-            await loadCoupons();
         } catch (err) {
             setError(err.message || `Failed to ${modalMode === 'edit' ? 'update' : 'create'} coupon`);
         } finally {
@@ -235,9 +228,8 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
                 setActionLoading(true);
                 setError('');
                 try {
-                    await approveCoupon(id);
+                    await couponMutations.approveCoupon.mutateAsync(id);
                     closeConfirm();
-                    await loadCoupons();
                 } catch (err) {
                     setError(err.message || 'Failed to approve coupon');
                 } finally {
@@ -257,9 +249,8 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
                 setActionLoading(true);
                 setError('');
                 try {
-                    await approveCoupon(id);
+                    await couponMutations.approveCoupon.mutateAsync(id);
                     closeConfirm();
-                    await loadCoupons();
                 } catch (err) {
                     setError(err.message || 'Failed to re-approve coupon');
                 } finally {
@@ -279,9 +270,8 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
                 setActionLoading(true);
                 setError('');
                 try {
-                    await rejectCoupon(id, 'Rejected by super admin');
+                    await couponMutations.rejectCoupon.mutateAsync({ id, reason: 'Rejected by super admin' });
                     closeConfirm();
-                    await loadCoupons();
                 } catch (err) {
                     setError(err.message || 'Failed to reject coupon');
                 } finally {

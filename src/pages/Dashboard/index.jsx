@@ -10,6 +10,7 @@ import BillSidebar from '../../components/dashboard/BillSidebar';
 import AddEditStationModal from '../../components/dashboard/AddEditStationModal';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { sidebarData, superadminSidebarData } from '../../constants/layoutData';
+import { useQueryClient } from '@tanstack/react-query';
 import {
     fetchOutlets,
     fetchOutletAnalytics,
@@ -18,22 +19,58 @@ import {
 } from '../../services/dashboardService';
 import { fetchCoupons } from '../../services/couponService';
 import { fetchRedemptions } from '../../services/redemptionService';
+import { qk } from '../../query/useAppQueries';
 
-const mapCoupon = (c) => {
+const currencySymbolForOutletType = (outletType) => {
+    const t = `${outletType || ''}`.toUpperCase();
+    if (t === 'PETROL' || t.includes('PETROL') || t === 'GAS' || t.includes('GAS_STATION')) {
+        return '₹';
+    }
+    return '$';
+};
+
+const mapCoupon = (c, outletType) => {
     const discountValue = parseFloat(c.discount_value || 0);
-    const discountStr = c.coupon_type === 'PERCENTAGE' ? `${discountValue}%` : `₹${discountValue}`;
+    const symbol = currencySymbolForOutletType(outletType);
+    const discountStr = c.coupon_type === 'PERCENTAGE' ? `${discountValue}%` : `${symbol}${discountValue}`;
     return { id: c.id, offer: c.title, type: c.coupon_type, discount: discountStr, unit: 'off', status: 'Approved' };
 };
 
-const mapTransaction = (t) => ({
-    id: t.id,
-    status: 'Approved',
-    amount: `₹${t.bill_amount_before_discount || 0}`,
-    discount: `-₹${t.discount_applied || 0}`,
-    couponId: `C${t.coupon_id}`,
-    date: t.redeemed_at ? new Date(t.redeemed_at).toLocaleDateString('en-GB') : '-',
-    time: t.redeemed_at ? new Date(t.redeemed_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '-',
-});
+const mapTransaction = (t, scopeCurrency = 'USD') => {
+    const billAmount = Number(t.bill_amount ?? 0);
+    const discountAmount = Number(t.discount_amount ?? 0);
+    const finalRaw = t.final_amount;
+    const finalAmount = Number.isFinite(Number(finalRaw))
+        ? Number(finalRaw)
+        : billAmount - discountAmount;
+    const redeemed = t.redeemed_at ? new Date(t.redeemed_at) : null;
+    const outlet = t.outlet || {};
+    const coupon = t.coupon || {};
+    const rawStatus = `${t.status || 'APPROVED'}`;
+    const statusLabel =
+        rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase();
+    const cur = t.discount_currency || scopeCurrency;
+    const sym = cur === 'INR' ? '₹' : '$';
+
+    return {
+        id: t.id,
+        status: statusLabel,
+        amount: `${sym}${billAmount.toFixed(2)}`,
+        discount: `-${sym}${discountAmount.toFixed(2)}`,
+        couponId: `C${t.coupon_id}`,
+        date: redeemed ? redeemed.toLocaleDateString('en-GB') : '-',
+        time: redeemed ? redeemed.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '-',
+        billNumber: t.bill_number || null,
+        billAmount,
+        discountAmount,
+        finalAmount,
+        couponTitle: coupon.title || null,
+        outletName: outlet.name || null,
+        outletAddress: [outlet.address, outlet.city, outlet.state].filter(Boolean).join(', ') || null,
+        fuelType: t.fuel_type || null,
+        redeemedAt: t.redeemed_at,
+    };
+};
 
 const formatNumber = (value) => new Intl.NumberFormat('en-IN').format(Number(value || 0));
 
@@ -82,6 +119,7 @@ const buildRangeParams = (rangeKey) => {
 };
 
 const Dashboard = ({ onNavigate, userRole, currentUser }) => {
+    const queryClient = useQueryClient();
     const [activeNav, setActiveNav] = useState('dashboard');
     const [view, setView] = useState('dashboard');
     const [selectedTransactionId, setSelectedTransactionId] = useState(null);
@@ -108,8 +146,13 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
         const { resetIndex = false, selectOutletId = null } = opts;
         try {
             const params = isRestaurants ? { type: 'RESTAURANT' } : { type: 'PETROL' };
-            const res = await fetchOutlets(params);
-            const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+            const list = await queryClient.ensureQueryData({
+                queryKey: qk.outlets(params),
+                queryFn: async () => {
+                    const res = await fetchOutlets(params);
+                    return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+                },
+            });
             const filtered = isRestaurants
                 ? list.filter(o => o.type === 'RESTAURANT')
                 : list.filter(o => o.type === 'PETROL');
@@ -128,7 +171,7 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
         } catch (err) {
             setError(err.message || 'Failed to load outlets');
         }
-    }, [isRestaurants]);
+    }, [isRestaurants, queryClient]);
 
     useEffect(() => { loadOutlets({ resetIndex: true }); }, [loadOutlets]);
 
@@ -149,7 +192,11 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
         setError('');
         try {
             // Statistics must come from a single source: analytics API.
-            const analyticsRes = await fetchOutletAnalytics(outlet.id, buildRangeParams(selectedRange)).catch(() => null);
+            const rangeParams = buildRangeParams(selectedRange);
+            const analyticsRes = await queryClient.ensureQueryData({
+                queryKey: qk.outletAnalytics(outlet.id, rangeParams),
+                queryFn: () => fetchOutletAnalytics(outlet.id, rangeParams),
+            }).catch(() => null);
 
             // Chart data
             if (analyticsRes?.daily_redemptions) {
@@ -192,13 +239,28 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
             ]);
 
             // Non-statistics sections load independently and do not affect analytics rendering.
-            const couponsRes = await fetchCoupons({ outlet_id: outlet.id, status: 'APPROVED' }).catch(() => null);
-            const rawCoupons = Array.isArray(couponsRes?.data) ? couponsRes.data : Array.isArray(couponsRes) ? couponsRes : [];
-            setActiveCoupons(rawCoupons.map(mapCoupon));
+            const rawCoupons = await queryClient.ensureQueryData({
+                queryKey: qk.coupons({ outlet_id: outlet.id, status: 'APPROVED' }),
+                queryFn: async () => {
+                    const couponsRes = await fetchCoupons({ outlet_id: outlet.id, status: 'APPROVED' });
+                    return Array.isArray(couponsRes?.data) ? couponsRes.data : Array.isArray(couponsRes) ? couponsRes : [];
+                },
+            }).catch(() => []);
+            setActiveCoupons(rawCoupons.map((c) => mapCoupon(c, outlet.type)));
 
-            const txRes = await fetchRedemptions({ outlet_id: outlet.id }).catch(() => null);
-            const rawTx = Array.isArray(txRes?.data) ? txRes.data : Array.isArray(txRes) ? txRes : [];
-            setTransactionHistory(rawTx.map(mapTransaction));
+            const txEnvelope = await queryClient.ensureQueryData({
+                queryKey: qk.redemptions({ outlet_id: outlet.id }),
+                queryFn: () => fetchRedemptions({ outlet_id: outlet.id }),
+            }).catch(() => null);
+            const rawTx = Array.isArray(txEnvelope?.redemptions)
+                ? txEnvelope.redemptions
+                : Array.isArray(txEnvelope)
+                    ? txEnvelope
+                    : [];
+            const txCurrency =
+                (txEnvelope && typeof txEnvelope.discount_currency === 'string' && txEnvelope.discount_currency) ||
+                'USD';
+            setTransactionHistory(rawTx.map((t) => mapTransaction(t, txCurrency)));
         } catch (err) {
             setError(err.message || 'Failed to load dashboard data');
             setStatsData([
@@ -210,7 +272,7 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
         } finally {
             setLoading(false);
         }
-    }, [outlets, currentIndex, selectedRange]);
+    }, [outlets, currentIndex, selectedRange, queryClient]);
 
     useEffect(() => {
         if (outlets.length > 0) loadDashboardData();
@@ -251,6 +313,7 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
                 const created = await createOutlet(payload);
                 focusId = created?.id ?? focusId;
             }
+            await queryClient.invalidateQueries({ queryKey: ['outlets'] });
             setIsAddStationOpen(false);
             setStationToEdit(null);
             await loadOutlets({ selectOutletId: focusId });
@@ -269,6 +332,10 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
         setError('');
         try {
             await updateOutlet(outletId, { status: 'DEACTIVATED' });
+            await queryClient.invalidateQueries({ queryKey: ['outlets'] });
+            await queryClient.invalidateQueries({ queryKey: ['outlet-analytics'] });
+            await queryClient.invalidateQueries({ queryKey: ['coupons'] });
+            await queryClient.invalidateQueries({ queryKey: ['redemptions'] });
             setConfirmDeactivateOpen(false);
             await loadOutlets({ resetIndex: false });
         } catch (err) {
@@ -437,6 +504,7 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
                         <BillSidebar
                             transaction={transactionHistory.find(t => t.id === selectedTransactionId)}
                             onClose={() => setSelectedTransactionId(null)}
+                            entityType={isRestaurants ? 'restaurant' : 'station'}
                         />
                     )}
                 </div>

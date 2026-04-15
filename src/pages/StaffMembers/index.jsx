@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import { sidebarData, superadminSidebarData } from '../../constants/layoutData';
 import { Pencil, Trash2, Check, Plus, ChevronLeft, ChevronRight, Fuel, Utensils } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import StaffTableRow from '../../components/dashboard/StaffTableRow';
 import AddEditStaffModal from '../../components/dashboard/AddEditStaffModal';
-import { fetchEmployees, createEmployee } from '../../services/staffService';
-import { fetchOutlets } from '../../services/dashboardService';
 import CustomSelect from '../../components/ui/CustomSelect';
+import { useCreateEmployeeMutation, useEmployeesQuery, useOutletsQuery } from '../../query/useAppQueries';
 
 const mapEmployee = (emp) => {
     const user = emp.User || emp;
@@ -33,51 +32,38 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 20;
 
-    const [staff, setStaff] = useState([]);
-    const [outlets, setOutlets] = useState([]);
     const [selectedOutletId, setSelectedOutletId] = useState(null);
-    const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
-    const [error, setError] = useState('');
+    const [, setError] = useState('');
+    const outletsQuery = useOutletsQuery(userRole === 'superadmin' ? {} : { type: 'PETROL' });
+    const outlets = useMemo(() => outletsQuery.data || [], [outletsQuery.data]);
+    const staffQuery = useEmployeesQuery(selectedOutletId);
+    const createEmployeeMutation = useCreateEmployeeMutation();
+    const staff = useMemo(
+        () => ((staffQuery.data || []).map(mapEmployee)),
+        [staffQuery.data],
+    );
+    const loading = outletsQuery.isLoading || (Boolean(selectedOutletId) && staffQuery.isLoading);
     const currentSidebarData = userRole === 'superadmin' ? superadminSidebarData : sidebarData;
     const selectedOutlet = outlets.find((o) => o.id === selectedOutletId) || null;
 
-    const loadStaff = useCallback(async (outletId) => {
-        if (!outletId) return;
-        setLoading(true);
-        setError('');
-        try {
-            const empData = await fetchEmployees(outletId);
-            const raw = Array.isArray(empData?.data) ? empData.data
-                : Array.isArray(empData) ? empData : [];
-            setStaff(raw.map(mapEmployee));
-        } catch (err) {
-            setError(err.message || 'Failed to load staff');
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    useEffect(() => {
+        if (selectedOutletId) return;
+        if (!outlets.length) return;
+        setSelectedOutletId(outlets[0].id);
+    }, [outlets, selectedOutletId]);
 
     useEffect(() => {
-        const init = async () => {
-            try {
-                const res = await fetchOutlets();
-                const list = Array.isArray(res?.data) ? res.data
-                    : Array.isArray(res) ? res : [];
-                setOutlets(list);
-                if (list.length > 0) {
-                    setSelectedOutletId(list[0].id);
-                    await loadStaff(list[0].id);
-                } else {
-                    setLoading(false);
-                }
-            } catch (err) {
-                setError(err.message || 'Failed to load outlets');
-                setLoading(false);
-            }
-        };
-        init();
-    }, [loadStaff]);
+        if (outletsQuery.error) {
+            setError(outletsQuery.error.message || 'Failed to load outlets');
+        }
+    }, [outletsQuery.error]);
+
+    useEffect(() => {
+        if (staffQuery.error) {
+            setError(staffQuery.error.message || 'Failed to load staff');
+        }
+    }, [staffQuery.error]);
 
     const handleNavChange = (navId) => {
         if (navId === 'dashboard' || navId === 'restaurants') onNavigate?.('dashboard');
@@ -109,7 +95,7 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
                 // No update employee route in backend yet, log for now
                 console.log('Edit employee (no backend PATCH route yet):', formData);
             } else {
-                await createEmployee({
+                await createEmployeeMutation.mutateAsync({
                     full_name: formData.name?.trim(),
                     email: formData.email?.trim() || undefined,
                     phone: formData.phone?.replace(/\s|-/g, '').trim(),
@@ -120,7 +106,6 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
                 });
             }
             setIsModalOpen(false);
-            await loadStaff(selectedOutletId);
         } catch (err) {
             setError(err.message || 'Failed to save staff member');
         } finally {
@@ -158,7 +143,6 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
                                 onChange={(nextValue) => {
                                     const outletId = Number(nextValue);
                                     setSelectedOutletId(outletId);
-                                    loadStaff(outletId);
                                     setCurrentPage(1);
                                     setSelectedIds([]);
                                 }}
