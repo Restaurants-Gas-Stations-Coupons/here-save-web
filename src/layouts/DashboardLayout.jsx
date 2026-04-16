@@ -12,7 +12,12 @@ const DashboardLayout = ({
     title,
     role,
     currentUser,
-    onAddStation
+    onAddStation,
+    searchValue,
+    onSearchChange,
+    searchPlaceholder,
+    showSearch = true,
+    onLogout,
 }) => {
     const activeNavLabel = Array.isArray(sidebarData?.navItems)
         ? sidebarData.navItems.find((item) => item.id === activeNav)?.label
@@ -37,6 +42,11 @@ const DashboardLayout = ({
                     navItems={sidebarData?.navItems || []}
                     activeNav={activeNav}
                     onNavChange={onNavChange}
+                    searchValue={searchValue}
+                    onSearchChange={onSearchChange}
+                    searchPlaceholder={searchPlaceholder}
+                    showSearch={showSearch}
+                    onLogout={onLogout}
                 />
                 <main className="flex-1 p-4 md:p-5 overflow-auto">
                     {children}

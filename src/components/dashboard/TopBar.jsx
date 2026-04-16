@@ -25,7 +25,20 @@ const getInitials = (name) => {
     return parts.map((p) => p[0]?.toUpperCase() || '').join('') || 'U';
 };
 
-const TopBar = ({ title, role, currentUser, onAddStation, navItems = [], activeNav, onNavChange }) => {
+const TopBar = ({
+    title,
+    role,
+    currentUser,
+    onAddStation,
+    navItems = [],
+    activeNav,
+    onNavChange,
+    searchValue = '',
+    onSearchChange,
+    searchPlaceholder = 'Search for something',
+    showSearch = true,
+    onLogout,
+}) => {
     const validNavItems = Array.isArray(navItems)
         ? navItems.filter((item) => item?.id && !item?.hidden)
         : [];
@@ -135,14 +148,18 @@ const TopBar = ({ title, role, currentUser, onAddStation, navItems = [], activeN
             <div className="flex-1" />
 
             {/* Search */}
-            <div className="flex items-center gap-3 bg-white rounded-[16px] px-5 py-3.5 w-[380px] shadow-sm">
-                <Search size={18} className="text-[#999999] shrink-0" />
-                <input
-                    type="text"
-                    placeholder="Search for something"
-                    className="flex-1 text-[15px] bg-transparent outline-none placeholder:text-[#999999] text-dark font-medium"
-                />
-            </div>
+            {showSearch && (
+                <div className="flex items-center gap-3 bg-white rounded-[16px] px-5 py-3.5 w-[380px] shadow-sm">
+                    <Search size={18} className="text-[#999999] shrink-0" />
+                    <input
+                        type="text"
+                        value={searchValue}
+                        onChange={(e) => onSearchChange?.(e.target.value)}
+                        placeholder={searchPlaceholder}
+                        className="flex-1 text-[15px] bg-transparent outline-none placeholder:text-[#999999] text-dark font-medium"
+                    />
+                </div>
+            )}
 
             {/* Notifications */}
             <div ref={notifRef} className="relative">
@@ -188,6 +205,7 @@ const TopBar = ({ title, role, currentUser, onAddStation, navItems = [], activeN
                     isOpen={showProfile}
                     onClose={() => setShowProfile(false)}
                     user={currentUser}
+                    onLogout={onLogout}
                 />
             </div>
         </header>

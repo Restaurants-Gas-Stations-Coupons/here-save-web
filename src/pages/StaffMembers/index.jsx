@@ -9,6 +9,7 @@ import AddEditStaffModal from '../../components/dashboard/AddEditStaffModal';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import CustomSelect from '../../components/ui/CustomSelect';
 import { useEmployeeMutations, useEmployeesQuery, useOutletsQuery } from '../../query/useAppQueries';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 
 const mapEmployee = (emp) => {
     const user = emp.User || emp;
@@ -37,21 +38,28 @@ const toApiTime = (value) => {
     return `${pad(h)}:${pad(m)}:${pad(s)}`;
 };
 
-const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
+const StaffMembers = ({ onNavigate, userRole, currentUser, onLogout }) => {
     const { t } = useTranslation();
     const [selectedIds, setSelectedIds] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingMember, setEditingMember] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 20;
+    const [searchText, setSearchText] = useState('');
+    const debouncedSearch = useDebouncedValue(searchText, 500);
+    const searchQuery = debouncedSearch.trim().length >= 2 ? debouncedSearch.trim() : '';
 
     const [selectedOutletId, setSelectedOutletId] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
     const [, setError] = useState('');
-    const outletsQuery = useOutletsQuery(userRole === 'superadmin' ? {} : { type: 'PETROL' });
+    const outletsQuery = useOutletsQuery({});
     const outlets = useMemo(() => outletsQuery.data || [], [outletsQuery.data]);
-    const staffQuery = useEmployeesQuery(selectedOutletId);
+    const staffParams = useMemo(
+        () => (searchQuery ? { q: searchQuery } : {}),
+        [searchQuery],
+    );
+    const staffQuery = useEmployeesQuery(selectedOutletId, staffParams);
     const employeeMutations = useEmployeeMutations();
     const staff = useMemo(
         () => ((staffQuery.data || []).map(mapEmployee)),
@@ -193,6 +201,10 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
             onNavChange={handleNavChange}
             role={userRole}
             currentUser={currentUser}
+            searchValue={searchText}
+            onSearchChange={setSearchText}
+            searchPlaceholder="Search staff by name, phone, or email"
+            onLogout={onLogout}
         >
             <div className="flex flex-col gap-4 h-full font-onest">
                 <div className="flex items-center justify-between">

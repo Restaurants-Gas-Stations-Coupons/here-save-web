@@ -11,7 +11,7 @@ export const qk = {
   outletAnalytics: (outletId, params = {}) => ['outlet-analytics', outletId, params],
   coupons: (params = {}) => ['coupons', params],
   redemptions: (params = {}) => ['redemptions', params],
-  employees: (outletId) => ['employees', outletId],
+  employees: (outletId, params = {}) => ['employees', outletId, params],
 };
 
 export function useOutletsQuery(params = {}, options = {}) {
@@ -56,11 +56,11 @@ export function useRedemptionsQuery(params = {}, options = {}) {
   });
 }
 
-export function useEmployeesQuery(outletId, options = {}) {
+export function useEmployeesQuery(outletId, params = {}, options = {}) {
   return useQuery({
-    queryKey: qk.employees(outletId),
+    queryKey: qk.employees(outletId, params),
     queryFn: async () => {
-      const res = await fetchEmployees(outletId);
+      const res = await fetchEmployees(outletId, params);
       return toArray(res?.data ?? res);
     },
     enabled: Boolean(outletId),

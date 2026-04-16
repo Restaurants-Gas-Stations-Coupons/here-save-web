@@ -7,6 +7,7 @@ import { sidebarData, superadminSidebarData } from '../../constants/layoutData';
 import { Plus, Ticket, Fuel, Utensils } from 'lucide-react';
 import CustomSelect from '../../components/ui/CustomSelect';
 import { useCouponMutations, useCouponsQuery, useOutletsQuery } from '../../query/useAppQueries';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 
 const currencySymbolForOutletType = (outletType) => {
     const t = `${outletType || ''}`.toUpperCase();
@@ -50,7 +51,7 @@ const toApiCouponType = (type) => {
     return normalized === 'PERCENTAGE' || normalized === 'PERCENT' ? 'PERCENTAGE' : 'FLAT';
 };
 
-const Coupons = ({ onNavigate, userRole, currentUser }) => {
+const Coupons = ({ onNavigate, userRole, currentUser, onLogout }) => {
     const [activeTab, setActiveTab] = useState('active');
     const [activeNav, setActiveNav] = useState('coupons');
     const [selectedId, setSelectedId] = useState(null);
@@ -58,6 +59,9 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
     const [modalMode, setModalMode] = useState('add');
     const [modalData, setModalData] = useState(null);
     const [currentLocationIndex, setCurrentLocationIndex] = useState(0);
+    const [searchText, setSearchText] = useState('');
+    const debouncedSearch = useDebouncedValue(searchText, 500);
+    const searchQuery = debouncedSearch.trim().length >= 2 ? debouncedSearch.trim() : '';
 
     const [actionLoading, setActionLoading] = useState(false);
     const [, setError] = useState('');
@@ -69,15 +73,16 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
         tone: 'danger',
         onConfirm: null,
     });
-    const outletsQuery = useOutletsQuery(userRole === 'superadmin' ? {} : { type: 'PETROL' });
+    const outletsQuery = useOutletsQuery({});
     const outlets = useMemo(() => outletsQuery.data || [], [outletsQuery.data]);
     const selectedOutlet = outlets[currentLocationIndex] || null;
     const couponParams = useMemo(() => {
+        const base = searchQuery ? { q: searchQuery } : {};
         if (userRole === 'superadmin' && selectedOutlet) {
-            return { outlet_id: selectedOutlet.id };
+            return { ...base, outlet_id: selectedOutlet.id };
         }
-        return {};
-    }, [userRole, selectedOutlet]);
+        return base;
+    }, [userRole, selectedOutlet, searchQuery]);
     const couponsQuery = useCouponsQuery(couponParams);
     const coupons = useMemo(
         () => (couponsQuery.data || []).map((c) => mapCoupon(c, selectedOutlet?.type)),
@@ -298,6 +303,10 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
             onNavChange={handleNavChange}
             role={userRole}
             currentUser={currentUser}
+            searchValue={searchText}
+            onSearchChange={setSearchText}
+            searchPlaceholder="Search coupons by title or description"
+            onLogout={onLogout}
         >
             <div className="flex flex-col gap-8 pb-10">
                 <div className="flex items-center justify-between gap-3 flex-wrap">

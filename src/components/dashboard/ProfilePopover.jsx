@@ -15,7 +15,7 @@ const getInitials = (name) => {
     return parts.map((p) => p[0]?.toUpperCase() || '').join('') || 'U';
 };
 
-const ProfilePopover = ({ isOpen, onClose, user }) => {
+const ProfilePopover = ({ isOpen, onClose, user, onLogout }) => {
     if (!isOpen) return null;
 
     const name = user?.full_name || 'User';
@@ -44,6 +44,18 @@ const ProfilePopover = ({ isOpen, onClose, user }) => {
                         </p>
                     </div>
                 </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-100">
+                <button
+                    onClick={() => {
+                        onClose?.();
+                        onLogout?.();
+                    }}
+                    className="w-full h-[44px] rounded-[12px] bg-[#DC0004] text-white text-[14px] font-semibold hover:bg-[#c40008] transition-colors"
+                >
+                    Logout
+                </button>
             </div>
         </div>
     );

@@ -20,6 +20,7 @@ import {
 import { fetchCoupons } from '../../services/couponService';
 import { fetchRedemptions } from '../../services/redemptionService';
 import { qk } from '../../query/useAppQueries';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 
 const currencySymbolForOutletType = (outletType) => {
     const t = `${outletType || ''}`.toUpperCase();
@@ -118,7 +119,7 @@ const buildRangeParams = (rangeKey) => {
     return { from: toYmd(from), to: toYmd(today) };
 };
 
-const Dashboard = ({ onNavigate, userRole, currentUser, initialNav = 'dashboard' }) => {
+const Dashboard = ({ onNavigate, userRole, currentUser, initialNav = 'dashboard', onLogout }) => {
     const queryClient = useQueryClient();
     const [activeNav, setActiveNav] = useState(initialNav);
     const [view, setView] = useState('dashboard');
@@ -136,8 +137,11 @@ const Dashboard = ({ onNavigate, userRole, currentUser, initialNav = 'dashboard'
     const [transactionHistory, setTransactionHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
+    const [searchText, setSearchText] = useState('');
     const [, setError] = useState('');
     const saveOutletInFlightRef = useRef(false);
+    const debouncedSearch = useDebouncedValue(searchText, 500);
+    const searchQuery = debouncedSearch.trim().length >= 2 ? debouncedSearch.trim() : '';
 
     const isRestaurants = activeNav === 'restaurants';
 
@@ -151,7 +155,7 @@ const Dashboard = ({ onNavigate, userRole, currentUser, initialNav = 'dashboard'
     const loadOutlets = useCallback(async (opts = {}) => {
         const { resetIndex = false, selectOutletId = null } = opts;
         try {
-            const params = isRestaurants ? { type: 'RESTAURANT' } : { type: 'PETROL' };
+            const params = searchQuery ? { q: searchQuery } : {};
             const list = await queryClient.ensureQueryData({
                 queryKey: qk.outlets(params),
                 queryFn: async () => {
@@ -159,9 +163,11 @@ const Dashboard = ({ onNavigate, userRole, currentUser, initialNav = 'dashboard'
                     return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
                 },
             });
-            const filtered = isRestaurants
-                ? list.filter(o => o.type === 'RESTAURANT')
-                : list.filter(o => o.type === 'PETROL');
+            const filtered = userRole === 'superadmin'
+                ? (isRestaurants
+                    ? list.filter(o => o.type === 'RESTAURANT')
+                    : list.filter(o => o.type === 'PETROL'))
+                : list;
             setOutlets(filtered);
             if (selectOutletId != null && selectOutletId !== '') {
                 const idx = filtered.findIndex((o) => String(o.id) === String(selectOutletId));
@@ -177,7 +183,7 @@ const Dashboard = ({ onNavigate, userRole, currentUser, initialNav = 'dashboard'
         } catch (err) {
             setError(err.message || 'Failed to load outlets');
         }
-    }, [isRestaurants, queryClient]);
+    }, [isRestaurants, queryClient, searchQuery, userRole]);
 
     useEffect(() => { loadOutlets({ resetIndex: true }); }, [loadOutlets]);
 
@@ -360,6 +366,11 @@ const Dashboard = ({ onNavigate, userRole, currentUser, initialNav = 'dashboard'
     };
 
     const currentEntityObj = outlets[currentIndex] || {};
+    const currentOutletAddress = [
+        currentEntityObj.address,
+        currentEntityObj.city,
+        currentEntityObj.state,
+    ].filter(Boolean).join(', ');
     const currentSidebarData = userRole === 'superadmin'
         ? {
             ...superadminSidebarData,
@@ -376,7 +387,11 @@ const Dashboard = ({ onNavigate, userRole, currentUser, initialNav = 'dashboard'
                 return item;
             }),
         }
-        : sidebarData;
+        : {
+            ...sidebarData,
+            stationLabel: currentEntityObj.name || sidebarData.stationLabel,
+            stationAddress: currentOutletAddress || sidebarData.stationAddress,
+        };
 
     const stationDetailData = {
         name: currentEntityObj.name || 'Unknown Outlet',
@@ -405,6 +420,11 @@ const Dashboard = ({ onNavigate, userRole, currentUser, initialNav = 'dashboard'
                 role={userRole}
                 currentUser={currentUser}
                 onAddStation={() => { setStationToEdit(null); setIsAddStationOpen(true); }}
+                searchValue={searchText}
+                onSearchChange={setSearchText}
+                searchPlaceholder="Search outlets by name or address"
+                showSearch={userRole === 'superadmin'}
+                onLogout={onLogout}
             >
                 <div className="flex gap-6 h-full">
                     <div className="flex-1 flex flex-col gap-4 min-w-0">
