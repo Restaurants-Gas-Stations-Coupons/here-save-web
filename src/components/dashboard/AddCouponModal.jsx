@@ -30,6 +30,9 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
     const [formData, setFormData] = useState(emptyForm);
     const [errors, setErrors] = useState({});
     const [submitting, setSubmitting] = useState(false);
+    const isEditMode = mode === 'edit';
+
+    const toUiCouponType = (type) => (`${type || ''}`.toUpperCase() === 'PERCENTAGE' ? 'Percentage' : 'Amount');
 
     useEffect(() => {
         if (isOpen) {
@@ -37,7 +40,7 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
             if (initialData && mode === 'edit') {
                 setFormData({
                     name: initialData.name || '',
-                    type: initialData.type === 'PERCENTAGE' ? 'Percentage' : (initialData.type || 'Amount'),
+                    type: toUiCouponType(initialData.type),
                     detailsHeader: initialData.detailsHeader || 'Flat',
                     detailsValue: initialData.discountValue || initialData.discount || '',
                     minPurchase: initialData.minPurchase || '',
@@ -88,7 +91,7 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
             if (isNaN(ul) || ul <= 0) e.usageLimit = 'Must be a positive whole number.';
         }
 
-        if (!formData.startDate) e.startDate = 'Start date is required.';
+        if (!isEditMode && !formData.startDate) e.startDate = 'Start date is required.';
 
         if (formData.endDate && formData.startDate && formData.endDate <= formData.startDate)
             e.endDate = 'End date must be after start date.';
@@ -158,7 +161,8 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
                                             setField('type', t);
                                             if (t === 'Amount') setField('detailsHeader', 'Flat');
                                         }}
-                                        className={`flex-1 h-[48px] rounded-[16px] text-[13.5px] font-bold transition-all border ${formData.type === t ? 'bg-white text-primary border-primary' : 'bg-[#F5F7F9] text-gray-400 border-transparent'}`}
+                                        disabled={isEditMode}
+                                        className={`flex-1 h-[48px] rounded-[16px] text-[13.5px] font-bold transition-all border ${formData.type === t ? 'bg-white text-primary border-primary' : 'bg-[#F5F7F9] text-gray-400 border-transparent'} ${isEditMode ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     >
                                         {t}
                                     </button>
@@ -235,6 +239,7 @@ const AddCouponModal = ({ isOpen, onClose, onCreate, initialData, mode = 'add' }
                                     minDate={todayISO}
                                     maxDate={formData.endDate || undefined}
                                     error={errors.startDate}
+                                    disabled={isEditMode}
                                 />
                             </div>
                             <div className="flex-1">

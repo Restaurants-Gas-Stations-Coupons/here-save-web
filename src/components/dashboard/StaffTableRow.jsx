@@ -26,22 +26,22 @@ const StaffTableRow = ({ member, isSelected, onToggle }) => {
                     )}
                 </div>
             </td>
-            <td className="py-4 px-3 min-w-[140px]">
-                <span className="text-[14px] font-medium text-dark leading-tight">{member.name}</span>
+            <td className="py-4 px-3">
+                <span className="text-[14px] font-medium text-dark leading-tight block truncate">{member.name}</span>
             </td>
-            <td className="py-4 px-3 min-w-[130px]">
-                <span className="text-[13px] text-[#555555] font-onest font-medium">{member.phone}</span>
+            <td className="py-4 px-3">
+                <span className="text-[13px] text-[#555555] font-onest font-medium block truncate">{member.phone}</span>
             </td>
-            <td className="py-4 px-3 min-w-[180px]">
-                <span className="text-[13px] text-[#555555] font-onest font-medium">{member.email}</span>
+            <td className="py-4 px-3">
+                <span className="text-[13px] text-[#555555] font-onest font-medium block truncate">{member.email || 'N/A'}</span>
             </td>
-            <td className="py-4 px-3 min-w-[100px]">
-                <span className="text-[13px] text-[#555555] font-onest lowercase first-letter:uppercase font-medium">{member.role}</span>
+            <td className="py-4 px-3">
+                <span className="text-[13px] text-[#555555] font-onest lowercase first-letter:uppercase font-medium block truncate">{member.role}</span>
             </td>
-            <td className="py-4 px-3 min-w-[140px]">
-                <span className="text-[13px] text-[#555555] font-onest font-medium">{member.shift}</span>
+            <td className="py-4 px-3">
+                <span className="text-[13px] text-[#555555] font-onest font-medium block truncate">{member.shift}</span>
             </td>
-            <td className="py-4 px-3 min-w-[110px] pr-5">
+            <td className="py-4 px-3 pr-5">
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E6F7F0] w-max border border-[#D1F1E3]">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#35C682]"></div>
                     <span className="text-[11px] font-bold text-[#35C682] leading-none uppercase tracking-wide">{member.permission}</span>

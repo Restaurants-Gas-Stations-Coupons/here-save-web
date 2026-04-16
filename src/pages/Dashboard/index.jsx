@@ -118,9 +118,9 @@ const buildRangeParams = (rangeKey) => {
     return { from: toYmd(from), to: toYmd(today) };
 };
 
-const Dashboard = ({ onNavigate, userRole, currentUser }) => {
+const Dashboard = ({ onNavigate, userRole, currentUser, initialNav = 'dashboard' }) => {
     const queryClient = useQueryClient();
-    const [activeNav, setActiveNav] = useState('dashboard');
+    const [activeNav, setActiveNav] = useState(initialNav);
     const [view, setView] = useState('dashboard');
     const [selectedTransactionId, setSelectedTransactionId] = useState(null);
     const [isAddStationOpen, setIsAddStationOpen] = useState(false);
@@ -140,6 +140,12 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
     const saveOutletInFlightRef = useRef(false);
 
     const isRestaurants = activeNav === 'restaurants';
+
+    useEffect(() => {
+        setActiveNav(initialNav);
+        setView('dashboard');
+        setCurrentIndex(0);
+    }, [initialNav]);
 
     // Load outlets — optional selectOutletId keeps the user on the same outlet after save (no “full reset”).
     const loadOutlets = useCallback(async (opts = {}) => {
@@ -211,6 +217,12 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
             }
 
             const summary = analyticsRes?.summary || {};
+            const changeBadge = (val) => {
+                if (val === 0) return { type: 'neutral', text: '0%' };
+                return val > 0
+                    ? { type: 'up', text: `${Math.abs(val)}%` }
+                    : { type: 'down', text: `${Math.abs(val)}%` };
+            };
             setStatsData([
                 {
                     id: 'coupons',
@@ -222,19 +234,19 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
                     id: 'redemptions',
                     label: 'Redemptions',
                     value: formatNumber(summary.redemptions),
-                    badge: { type: 'down', text: '6.8%' },
+                    badge: changeBadge(summary.redemptions_change ?? 0),
                 },
                 {
                     id: 'discounts',
                     label: 'Discounts',
                     value: formatNumber(summary.discounts),
-                    badge: { type: 'up', text: '6.8%' },
+                    badge: changeBadge(summary.discounts_change ?? 0),
                 },
                 {
                     id: 'totalSales',
                     label: 'Total Sale',
                     value: formatNumber(summary.total_sales),
-                    badge: { type: 'up', text: '6.8%' },
+                    badge: changeBadge(summary.total_sales_change ?? 0),
                 },
             ]);
 
@@ -282,6 +294,8 @@ const Dashboard = ({ onNavigate, userRole, currentUser }) => {
     const handleNavChange = (navId) => {
         setActiveNav(navId);
         setView('dashboard');
+        if (navId === 'dashboard') onNavigate?.('dashboard');
+        if (navId === 'restaurants') onNavigate?.('restaurants');
         if (navId === 'coupons') onNavigate?.('coupons');
         if (navId === 'staff') onNavigate?.('staff');
     };

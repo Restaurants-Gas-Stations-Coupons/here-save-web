@@ -1,17 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Search, Bell } from 'lucide-react';
 import ProfilePopover from './ProfilePopover';
 import NotificationPopover from './NotificationPopover';
-import { fetchNotifications, markAllNotificationsRead } from '../../services/notificationService';
+import { fetchNotifications, fetchUnreadCount, markNotificationRead, markAllNotificationsRead } from '../../services/notificationService';
 
 const mapNotification = (n) => ({
     id: n.id,
-    title: n.title || n.message || 'New notification',
-    timestamp: new Date(n.created_at || Date.now()).toLocaleString('en-US', {
-        weekday: 'short', hour: 'numeric', minute: '2-digit'
-    }),
-    actionLabel: 'View',
+    title: n.title || 'New notification',
+    message: n.message || '',
+    type: n.type || '',
+    timestamp: n.created_at
+        ? new Date(n.created_at).toLocaleString('en-US', {
+            weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        })
+        : '',
     isUnread: !n.is_read,
+    metadata: n.metadata || null,
 });
 
 const getInitials = (name) => {
@@ -41,22 +45,25 @@ const TopBar = ({ title, role, currentUser, onAddStation, navItems = [], activeN
     const profileRef = useRef(null);
     const notifRef = useRef(null);
 
+    const loadNotifications = useCallback(async () => {
+        try {
+            const [data, count] = await Promise.all([
+                fetchNotifications({ limit: 30 }),
+                fetchUnreadCount(),
+            ]);
+            const list = Array.isArray(data) ? data : [];
+            setNotifications(list.map(mapNotification));
+            setUnreadCount(typeof count === 'number' ? count : 0);
+        } catch {
+            // silently ignore
+        }
+    }, []);
+
     useEffect(() => {
-        // Notifications are only for USER role in the backend.
-        // For OUTLET_ADMIN / SUPER_ADMIN we skip silently.
-        if (role === 'admin' || role === 'superadmin') return;
-        const load = async () => {
-            try {
-                const data = await fetchNotifications();
-                const list = Array.isArray(data?.data) ? data.data : [];
-                setNotifications(list.map(mapNotification));
-                setUnreadCount(list.filter(n => !n.is_read).length);
-            } catch {
-                // silently ignore if not permitted
-            }
-        };
-        load();
-    }, [role]);
+        loadNotifications();
+        const interval = setInterval(loadNotifications, 30000);
+        return () => clearInterval(interval);
+    }, [loadNotifications]);
 
     useEffect(() => {
         const handleOutsideClick = (event) => {
@@ -72,10 +79,22 @@ const TopBar = ({ title, role, currentUser, onAddStation, navItems = [], activeN
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, []);
 
+    const handleMarkOneRead = async (id) => {
+        try {
+            await markNotificationRead(id);
+            setNotifications((prev) =>
+                prev.map((n) => (n.id === id ? { ...n, isUnread: false } : n))
+            );
+            setUnreadCount((c) => Math.max(0, c - 1));
+        } catch (err) {
+            console.error('Failed to mark notification as read', err);
+        }
+    };
+
     const handleMarkAllRead = async () => {
         try {
             await markAllNotificationsRead();
-            setNotifications(prev => prev.map(n => ({ ...n, isUnread: false })));
+            setNotifications((prev) => prev.map((n) => ({ ...n, isUnread: false })));
             setUnreadCount(0);
         } catch (err) {
             console.error('Failed to mark notifications as read', err);
@@ -146,6 +165,7 @@ const TopBar = ({ title, role, currentUser, onAddStation, navItems = [], activeN
                     isOpen={showNotif}
                     onClose={() => setShowNotif(false)}
                     notifications={notifications}
+                    onMarkOneRead={handleMarkOneRead}
                     onMarkAllRead={handleMarkAllRead}
                 />
             </div>

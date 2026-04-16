@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchOutletAnalytics, fetchOutlets } from '../services/dashboardService';
 import { fetchCoupons, createCoupon, updateCoupon, approveCoupon, rejectCoupon, deleteCoupon } from '../services/couponService';
 import { fetchRedemptions } from '../services/redemptionService';
-import { fetchEmployees, createEmployee } from '../services/staffService';
+import { fetchEmployees, createEmployee, updateEmployee, deleteEmployee } from '../services/staffService';
 
 const toArray = (payload) => (Array.isArray(payload) ? payload : []);
 
@@ -98,4 +98,31 @@ export function useCreateEmployeeMutation() {
       qc.invalidateQueries({ queryKey: ['employees', vars?.outlet_id] });
     },
   });
+}
+
+export function useEmployeeMutations() {
+  const qc = useQueryClient();
+  const invalidateEmployees = (outletId) => {
+    qc.invalidateQueries({ queryKey: ['employees', outletId] });
+  };
+
+  return {
+    createEmployee: useMutation({
+      mutationFn: createEmployee,
+      onSuccess: (_, vars) => invalidateEmployees(vars?.outlet_id),
+    }),
+    updateEmployee: useMutation({
+      mutationFn: ({ id, data }) => updateEmployee(id, data),
+      onSuccess: (res, vars) => {
+        const outletId = vars?.outlet_id ?? res?.data?.outlet_id;
+        invalidateEmployees(outletId);
+      },
+    }),
+    deleteEmployee: useMutation({
+      mutationFn: ({ id }) => deleteEmployee(id),
+      onSuccess: (_, vars) => {
+        invalidateEmployees(vars?.outlet_id);
+      },
+    }),
+  };
 }

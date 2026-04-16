@@ -3,10 +3,12 @@ import DashboardLayout from '../../layouts/DashboardLayout';
 import { sidebarData, superadminSidebarData } from '../../constants/layoutData';
 import { Pencil, Trash2, Check, Plus, ChevronLeft, ChevronRight, Fuel, Utensils } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import * as XLSX from 'xlsx';
 import StaffTableRow from '../../components/dashboard/StaffTableRow';
 import AddEditStaffModal from '../../components/dashboard/AddEditStaffModal';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 import CustomSelect from '../../components/ui/CustomSelect';
-import { useCreateEmployeeMutation, useEmployeesQuery, useOutletsQuery } from '../../query/useAppQueries';
+import { useEmployeeMutations, useEmployeesQuery, useOutletsQuery } from '../../query/useAppQueries';
 
 const mapEmployee = (emp) => {
     const user = emp.User || emp;
@@ -14,14 +16,25 @@ const mapEmployee = (emp) => {
         id: emp.id,
         name: user.full_name || user.name || 'Unknown',
         phone: user.phone || 'N/A',
-        email: user.email || 'N/A',
+        email: user.email || '',
         role: user.role || 'EMPLOYEE',
         shift: `${emp.shift_start || '09:00'} to ${emp.shift_end || '17:00'}`,
         permission: emp.status === 'ACTIVE' ? 'Accepted' : 'Pending',
-        image: user.profile_picture || null,
+        image: user.profile_picture_base64 || null,
         user_id: emp.user_id,
         outlet_id: emp.outlet_id,
     };
+};
+
+const toApiTime = (value) => {
+    if (!value) return undefined;
+    const parts = `${value}`.split(':');
+    const h = Number(parts[0]);
+    const m = Number(parts[1]);
+    const s = Number(parts[2] ?? 0);
+    if ([h, m, s].some((n) => Number.isNaN(n))) return undefined;
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
 };
 
 const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
@@ -34,11 +47,12 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
 
     const [selectedOutletId, setSelectedOutletId] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
     const [, setError] = useState('');
     const outletsQuery = useOutletsQuery(userRole === 'superadmin' ? {} : { type: 'PETROL' });
     const outlets = useMemo(() => outletsQuery.data || [], [outletsQuery.data]);
     const staffQuery = useEmployeesQuery(selectedOutletId);
-    const createEmployeeMutation = useCreateEmployeeMutation();
+    const employeeMutations = useEmployeeMutations();
     const staff = useMemo(
         () => ((staffQuery.data || []).map(mapEmployee)),
         [staffQuery.data],
@@ -66,7 +80,8 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
     }, [staffQuery.error]);
 
     const handleNavChange = (navId) => {
-        if (navId === 'dashboard' || navId === 'restaurants') onNavigate?.('dashboard');
+        if (navId === 'dashboard') onNavigate?.('dashboard');
+        if (navId === 'restaurants') onNavigate?.('restaurants');
         if (navId === 'coupons') onNavigate?.('coupons');
     };
 
@@ -92,16 +107,28 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
         setError('');
         try {
             if (editingMember) {
-                // No update employee route in backend yet, log for now
-                console.log('Edit employee (no backend PATCH route yet):', formData);
+                await employeeMutations.updateEmployee.mutateAsync({
+                    id: editingMember.id,
+                    outlet_id: selectedOutletId,
+                    data: {
+                        full_name: formData.name?.trim(),
+                        email: formData.email?.trim() || null,
+                        phone: formData.phone?.replace(/\s|-/g, '').trim(),
+                        profile_picture_base64: formData.profilePictureBase64 || null,
+                        shift_start: toApiTime(formData.startTime),
+                        shift_end: toApiTime(formData.endTime),
+                        status: 'ACTIVE',
+                    },
+                });
             } else {
-                await createEmployeeMutation.mutateAsync({
+                await employeeMutations.createEmployee.mutateAsync({
                     full_name: formData.name?.trim(),
                     email: formData.email?.trim() || undefined,
                     phone: formData.phone?.replace(/\s|-/g, '').trim(),
+                    profile_picture_base64: formData.profilePictureBase64 || undefined,
                     outlet_id: selectedOutletId,
-                    shift_start: formData.startTime ? `${formData.startTime}:00` : undefined,
-                    shift_end: formData.endTime ? `${formData.endTime}:00` : undefined,
+                    shift_start: toApiTime(formData.startTime),
+                    shift_end: toApiTime(formData.endTime),
                     status: 'ACTIVE',
                 });
             }
@@ -111,6 +138,46 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
         } finally {
             setActionLoading(false);
         }
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!selectedIds.length) return;
+        setActionLoading(true);
+        setError('');
+        try {
+            await Promise.all(
+                selectedIds.map((id) =>
+                    employeeMutations.deleteEmployee.mutateAsync({ id, outlet_id: selectedOutletId })
+                )
+            );
+            setSelectedIds([]);
+            setConfirmDeleteOpen(false);
+        } catch (err) {
+            setError(err.message || 'Failed to delete staff member');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleExport = () => {
+        if (!staff.length) return;
+        const rows = staff.map((m) => ({
+            'Full Name': m.name,
+            'Phone': m.phone,
+            'Email': m.email || 'N/A',
+            'Role': m.role,
+            'Shift Time': m.shift,
+            'Permission': m.permission,
+        }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const colWidths = Object.keys(rows[0]).map((key) => ({
+            wch: Math.max(key.length, ...rows.map((r) => String(r[key] || '').length)) + 2,
+        }));
+        ws['!cols'] = colWidths;
+        const wb = XLSX.utils.book_new();
+        const outletName = selectedOutlet?.name || 'Staff';
+        XLSX.utils.book_append_sheet(wb, ws, 'Staff Members');
+        XLSX.writeFile(wb, `${outletName.replace(/[^a-zA-Z0-9]/g, '_')}_Staff_Members.xlsx`);
     };
 
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -171,12 +238,19 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
                             </button>
                         )}
                         {selectedIds.length > 0 && (
-                            <button className="flex items-center gap-2.5 px-5 py-2.5 bg-white border border-gray-100 rounded-[14px] text-[14px] font-semibold text-primary hover:bg-red-50 transition-all shadow-sm">
+                            <button
+                                onClick={() => setConfirmDeleteOpen(true)}
+                                className="flex items-center gap-2.5 px-5 py-2.5 bg-white border border-gray-100 rounded-[14px] text-[14px] font-semibold text-primary hover:bg-red-50 transition-all shadow-sm"
+                            >
                                 <Trash2 className="w-[18px] h-[18px] text-primary" />
                                 {t('staff.delete')}
                             </button>
                         )}
-                        <button className="flex items-center gap-2.5 px-5 py-2.5 bg-white border border-gray-100 rounded-[14px] text-[14px] font-semibold text-dark hover:bg-gray-50 transition-all shadow-sm">
+                        <button
+                            onClick={handleExport}
+                            disabled={!staff.length}
+                            className="flex items-center gap-2.5 px-5 py-2.5 bg-white border border-gray-100 rounded-[14px] text-[14px] font-semibold text-dark hover:bg-gray-50 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
                             <img src="/images/export.svg" alt="export" className="w-[18px] h-[18px]" />
                             {t('staff.export')}
                         </button>
@@ -197,7 +271,17 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
                         ) : staff.length === 0 ? (
                             <div className="flex justify-center items-center h-48 text-gray-400 text-sm">No staff members found for the selected outlet.</div>
                         ) : (
-                            <table className="w-full text-left border-collapse">
+                            <table className="w-full table-fixed text-left border-collapse">
+                                <colgroup>
+                                    <col className="w-[5%]" />
+                                    <col className="w-[8%]" />
+                                    <col className="w-[14.5%]" />
+                                    <col className="w-[14.5%]" />
+                                    <col className="w-[14.5%]" />
+                                    <col className="w-[14.5%]" />
+                                    <col className="w-[14.5%]" />
+                                    <col className="w-[14.5%]" />
+                                </colgroup>
                                 <thead>
                                     <tr className="bg-[#DC000408]">
                                         <th className="py-4 pl-5 pr-3 w-[50px]">
@@ -269,6 +353,21 @@ const StaffMembers = ({ onNavigate, userRole, currentUser }) => {
                 onSave={handleSave}
                 member={editingMember}
                 loading={actionLoading}
+            />
+
+            <ConfirmModal
+                isOpen={confirmDeleteOpen}
+                title={selectedIds.length > 1 ? 'Delete Staff Members' : 'Delete Staff Member'}
+                message={
+                    selectedIds.length > 1
+                        ? `Are you sure you want to delete ${selectedIds.length} staff members? This action cannot be undone.`
+                        : 'Are you sure you want to delete this staff member? This action cannot be undone.'
+                }
+                confirmText="Delete"
+                tone="danger"
+                loading={actionLoading}
+                onCancel={() => setConfirmDeleteOpen(false)}
+                onConfirm={handleDeleteConfirm}
             />
         </DashboardLayout>
     );

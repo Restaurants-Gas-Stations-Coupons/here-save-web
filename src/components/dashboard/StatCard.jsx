@@ -13,6 +13,14 @@ const StatBadge = ({ badge }) => {
         );
     }
 
+    if (badge.type === 'neutral') {
+        return (
+            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                {badge.text}
+            </span>
+        );
+    }
+
     const isUp = badge.type === 'up';
     return (
         <span

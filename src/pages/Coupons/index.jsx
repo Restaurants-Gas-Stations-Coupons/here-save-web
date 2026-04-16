@@ -45,6 +45,11 @@ const mapCoupon = (c, outletType) => {
     };
 };
 
+const toApiCouponType = (type) => {
+    const normalized = `${type || ''}`.toUpperCase();
+    return normalized === 'PERCENTAGE' || normalized === 'PERCENT' ? 'PERCENTAGE' : 'FLAT';
+};
+
 const Coupons = ({ onNavigate, userRole, currentUser }) => {
     const [activeTab, setActiveTab] = useState('active');
     const [activeNav, setActiveNav] = useState('coupons');
@@ -99,7 +104,8 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
 
     const handleNavChange = (navId) => {
         setActiveNav(navId);
-        if (navId === 'dashboard' || navId === 'restaurants') onNavigate?.('dashboard');
+        if (navId === 'dashboard') onNavigate?.('dashboard');
+        if (navId === 'restaurants') onNavigate?.('restaurants');
         if (navId === 'staff') onNavigate?.('staff');
     };
 
@@ -195,14 +201,16 @@ const Coupons = ({ onNavigate, userRole, currentUser }) => {
             const payload = {
                 outlet_id: targetOutlet.id,
                 title: formData.name,
-                coupon_type: formData.type === 'Amount' ? 'FLAT' : 'PERCENTAGE',
+                coupon_type: toApiCouponType(formData.type),
                 discount_mode: formData.detailsHeader?.toUpperCase() === 'UPTO' ? 'UPTO' : 'FLAT',
                 discount_value: parseFloat(formData.detailsValue) || 0,
                 min_purchase_amount: formData.minPurchase ? parseFloat(formData.minPurchase) : undefined,
                 usage_limit_total: formData.usageLimit ? parseInt(formData.usageLimit) : undefined,
-                start_date: parseDateToISO(formData.startDate),
                 end_date: parseDateToISO(formData.endDate),
             };
+            if (modalMode !== 'edit') {
+                payload.start_date = parseDateToISO(formData.startDate);
+            }
             if (modalMode === 'edit' && modalData?.id) {
                 await couponMutations.updateCoupon.mutateAsync({ id: modalData.id, data: payload });
             } else {
