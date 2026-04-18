@@ -10,6 +10,10 @@ import LoginForm from '../components/features/auth/LoginForm';
 import OTPModal from '../components/ui/OTPModal';
 import { loginWithPhone, fetchCurrentUser } from '../services/authService';
 
+// Temporary demo flag: when true, bypass phone auth and go straight to dashboard.
+// Temporary demo flag: when true, bypass phone auth and go straight to dashboard.
+const DEMO_MODE = false;
+
 const Login = ({ onLoginSuccess }) => {
   const { t, i18n } = useTranslation();
   const [isOtpOpen, setIsOtpOpen] = useState(false);

@@ -80,12 +80,15 @@ const Sidebar = ({ data, activeNav, onNavChange, activeSubNav, onSubNavChange })
                             {isActive && expandedNavId === item.id && item.subItems && (
                                 <div className="mt-1 flex flex-col relative pl-[22px] ml-3 border-l border-[#E5E5E5] pb-2">
                                     {item.subItems.map((subItem, index) => {
-                                        const isSubActive = activeSubNav === subItem.id;
+                                        const isSubActive = isActive && activeSubNav === subItem.id;
                                         return (
                                             <button
                                                 key={subItem.id}
-                                                onClick={() => onSubNavChange && onSubNavChange(subItem.id)}
-                                                className={`relative py-2 text-[12px] font-medium text-left transition-colors ${isSubActive ? 'text-primary' : 'text-[#939393] hover:text-dark'
+                                                onClick={() => {
+                                                    onNavChange(item.id);
+                                                    onSubNavChange && onSubNavChange(subItem.id);
+                                                }}
+                                                className={`relative py-2 text-[12px] font-medium text-left transition-colors ${isSubActive ? 'text-primary font-bold' : 'text-[#939393] hover:text-dark'
                                                     }`}
                                             >
                                                 {/* Horizontal branch line */}

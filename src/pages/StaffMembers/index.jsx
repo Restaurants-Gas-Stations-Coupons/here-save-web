@@ -194,6 +194,8 @@ const StaffMembers = ({ onNavigate, userRole, currentUser, onLogout }) => {
     const totalPages = Math.ceil(staff.length / (itemsPerPage || 1));
     const allSelected = selectedIds.length === currentStaff.length && currentStaff.length > 0;
 
+    const currentSidebarData = userRole === 'superadmin' ? superadminSidebarData : sidebarData;
+
     return (
         <DashboardLayout
             sidebarData={currentSidebarData}
