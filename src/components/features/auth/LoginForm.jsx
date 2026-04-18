@@ -25,15 +25,6 @@ const LoginForm = ({ onSubmit, loading, error }) => {
                 error={error}
             />
 
-            <div className="flex justify-end">
-                <button
-                    type="button"
-                    className="text-sm font-medium text-grayCustom hover:text-primary transition-colors"
-                >
-                    {t('login.forgot_password')}
-                </button>
-            </div>
-
             <Button type="submit" variant="primary" className="h-[56px] text-base font-semibold" disabled={loading}>
                 {loading ? t('login.sending', 'Sending…') : t('login.login_button')}
             </Button>

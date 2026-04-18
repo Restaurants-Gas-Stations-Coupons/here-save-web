@@ -15,12 +15,12 @@ const FullTransactionRow = ({ transaction, isSelected, onViewBill }) => {
                 </span>
             </div>
 
-            <div className="flex items-baseline gap-1.5 w-[150px] shrink-0">
+            <div className="flex items-baseline gap-1.5 w-[180px] shrink-0">
                 <span className="text-[17px] font-bold text-dark">{transaction.amount}</span>
                 <span className="text-[14.5px] text-[#999999] font-medium">({transaction.discount})</span>
             </div>
 
-            <div className="flex-1">
+            <div className="flex-1 pl-3">
                 <span className="text-[15px] text-[#999999] font-medium">
                     Coupon ID: <span className="text-dark font-bold">{transaction.couponId}</span>
                 </span>

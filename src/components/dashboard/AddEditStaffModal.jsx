@@ -1,51 +1,195 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Clock } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import Cropper from 'react-easy-crop';
+import TimePicker from '../ui/TimePicker';
+
+const Field = ({ label, error, children }) => (
+    <div className="space-y-2">
+        {label && <label className="text-[12px] font-semibold text-[#555555] ml-1">{label}</label>}
+        {children}
+        {error && <p className="text-[12px] text-red-500 ml-1 flex items-center gap-1">
+            <span className="w-3.5 h-3.5 rounded-full bg-red-100 flex items-center justify-center text-[9px] font-black text-red-500 flex-shrink-0">!</span>
+            {error}
+        </p>}
+    </div>
+);
+
+const getCroppedImageDataUrl = (imageSrc, cropPixels, mimeType = 'image/jpeg', quality = 0.92) =>
+    new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = cropPixels.width;
+            canvas.height = cropPixels.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                reject(new Error('Failed to get canvas context'));
+                return;
+            }
+            ctx.drawImage(
+                image,
+                cropPixels.x,
+                cropPixels.y,
+                cropPixels.width,
+                cropPixels.height,
+                0,
+                0,
+                cropPixels.width,
+                cropPixels.height,
+            );
+            resolve(canvas.toDataURL(mimeType, quality));
+        };
+        image.onerror = () => reject(new Error('Failed to load image for cropping'));
+        image.src = imageSrc;
+    });
 
 const AddEditStaffModal = ({ isOpen, onClose, onSave, member = null }) => {
     const { t } = useTranslation();
-    const [formData, setFormData] = useState({
+
+    const emptyForm = {
         name: '',
+        email: '',
         phone: '',
         role: '',
         startTime: '',
         endTime: '',
-    });
+        profilePictureBase64: '',
+    };
+    const [formData, setFormData] = useState(emptyForm);
+    const [errors, setErrors] = useState({});
+    const [submitting, setSubmitting] = useState(false);
+    const [cropSource, setCropSource] = useState('');
+    const [crop, setCrop] = useState({ x: 0, y: 0 });
+    const [zoom, setZoom] = useState(1);
+    const [cropPixels, setCropPixels] = useState(null);
 
     useEffect(() => {
-        if (member) {
-            setFormData({
-                name: member.name || '',
-                phone: member.phone || '',
-                role: member.role || '',
-                startTime: member.shift?.split(' to ')[0] || '',
-                endTime: member.shift?.split(' to ')[1] || '',
-            });
-        } else {
-            setFormData({
-                name: '',
-                phone: '',
-                role: '',
-                startTime: '',
-                endTime: '',
-            });
+        if (isOpen) {
+            setErrors({});
+            if (member) {
+                setFormData({
+                    name: member.name || '',
+                    email: member.email || '',
+                    phone: member.phone || '',
+                    role: member.role || '',
+                    startTime: member.shift?.split(' to ')[0] || '',
+                    endTime: member.shift?.split(' to ')[1] || '',
+                    profilePictureBase64: member.image || '',
+                });
+            } else {
+                setFormData(emptyForm);
+            }
         }
-    }, [member, isOpen]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, member]);
 
     if (!isOpen) return null;
 
     const roles = ['Cashier', 'Manager', 'Attendant'];
 
+    const setField = (key, val) => {
+        setFormData(prev => ({ ...prev, [key]: val }));
+        if (errors[key]) setErrors(prev => ({ ...prev, [key]: '' }));
+    };
+
+    // Compare HH:MM strings
+    const timeToMinutes = (t) => {
+        if (!t) return null;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    const validate = () => {
+        const e = {};
+
+        if (!formData.name.trim()) e.name = 'Full name is required.';
+        else if (formData.name.trim().length < 2) e.name = 'Name must be at least 2 characters.';
+
+        if (!formData.phone.trim()) e.phone = 'Phone number is required.';
+        else if (!/^\+?[0-9]{10,15}$/.test(formData.phone.replace(/\s/g, '')))
+            e.phone = 'Enter a valid phone number (10–15 digits).';
+
+        if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+            e.email = 'Enter a valid email address.';
+        }
+
+        if (!formData.role) e.role = 'Please select a role.';
+
+        if (!formData.startTime) e.startTime = 'Start time is required.';
+        if (!formData.endTime) e.endTime = 'End time is required.';
+
+        if (formData.startTime && formData.endTime) {
+            const sm = timeToMinutes(formData.startTime);
+            const em = timeToMinutes(formData.endTime);
+            if (em <= sm) e.endTime = 'End time must be after start time.';
+        }
+
+        if (formData.profilePictureBase64 && !/^data:image\/(png|jpe?g|webp);base64,/i.test(formData.profilePictureBase64)) {
+            e.profilePictureBase64 = 'Profile picture must be PNG, JPG, JPEG, or WEBP.';
+        }
+
+        return e;
+    };
+
+    const onPickProfileImage = (evt) => {
+        const file = evt.target.files?.[0];
+        if (!file) return;
+        if (!/^image\/(png|jpeg|jpg|webp)$/i.test(file.type)) {
+            setErrors((prev) => ({ ...prev, profilePictureBase64: 'Only PNG, JPG, JPEG, WEBP are supported.' }));
+            evt.target.value = '';
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            setErrors((prev) => ({ ...prev, profilePictureBase64: 'Image size must be 2MB or less.' }));
+            evt.target.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            setCropSource(String(reader.result || ''));
+            setCrop({ x: 0, y: 0 });
+            setZoom(1);
+            setCropPixels(null);
+            setErrors((prev) => ({ ...prev, profilePictureBase64: '' }));
+        };
+        reader.onerror = () => setErrors((prev) => ({ ...prev, profilePictureBase64: 'Failed to read selected image.' }));
+        reader.readAsDataURL(file);
+        evt.target.value = '';
+    };
+
+    const applyCrop = async () => {
+        if (!cropSource || !cropPixels) return;
+        try {
+            const cropped = await getCroppedImageDataUrl(cropSource, cropPixels, 'image/jpeg', 0.9);
+            setField('profilePictureBase64', cropped);
+            setCropSource('');
+        } catch (err) {
+            setErrors((prev) => ({ ...prev, profilePictureBase64: err.message || 'Failed to crop image.' }));
+        }
+    };
+
+    const handleSubmit = async () => {
+        const e = validate();
+        if (Object.keys(e).length > 0) { setErrors(e); return; }
+        setSubmitting(true);
+        try {
+            await onSave(formData);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const inputCls = (hasError) =>
+        `w-full px-4 py-3 bg-[#F8F9FA] border rounded-[16px] text-[14px] focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary/5 transition-all placeholder:text-gray-400 ${hasError ? 'border-red-400 ring-2 ring-red-100' : 'border-transparent focus:border-primary/20'}`;
+
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div
-                className="absolute inset-0 bg-black/40 backdrop-blur-[8px]"
-                onClick={onClose}
-            />
-            <div className="relative bg-white rounded-[32px] w-full max-w-[440px] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
-                <div className="p-8 font-onest">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[8px]" onClick={onClose} />
+            <div className="relative bg-white rounded-[32px] w-full max-w-[440px] shadow-2xl animate-in fade-in zoom-in duration-300 max-h-[calc(100vh-24px)] sm:max-h-[calc(100vh-32px)] overflow-y-auto">
+                <div className="p-6 sm:p-8 font-onest">
                     {/* Header */}
-                    <div className="flex items-center gap-3 mb-8">
+                    <div className="flex items-center gap-3 mb-6 sm:mb-8">
                         <div className="w-10 h-10 rounded-[12px] bg-[#FFF5F5] flex items-center justify-center">
                             <Users className="text-primary w-5 h-5" />
                         </div>
@@ -55,97 +199,182 @@ const AddEditStaffModal = ({ isOpen, onClose, onSave, member = null }) => {
                     </div>
 
                     {/* Form */}
-                    <div className="space-y-6">
-                        <div className="space-y-2">
-                            <label className="text-[13px] font-semibold text-[#555555] ml-1">{t('staff.modal.name_label')}</label>
+                    <div className="space-y-3.5 sm:space-y-4">
+                        <Field label="Profile Picture (Selfie)" error={errors.profilePictureBase64}>
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-14 h-14 rounded-full overflow-hidden bg-[#F3F4F6] border border-gray-200 flex items-center justify-center">
+                                        {formData.profilePictureBase64 ? (
+                                            <img src={formData.profilePictureBase64} alt="Staff profile preview" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <Users className="w-5 h-5 text-gray-400" />
+                                        )}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <label className="px-3 py-1.5 text-[12px] font-semibold rounded-[12px] border border-gray-200 bg-white hover:bg-gray-50 cursor-pointer">
+                                            Upload Selfie
+                                            <input
+                                                type="file"
+                                                accept="image/png,image/jpeg,image/jpg,image/webp"
+                                                className="hidden"
+                                                onChange={onPickProfileImage}
+                                            />
+                                        </label>
+                                        {formData.profilePictureBase64 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setField('profilePictureBase64', '')}
+                                                className="px-3 py-1.5 text-[12px] font-semibold rounded-[12px] border border-red-200 text-primary bg-white hover:bg-red-50"
+                                            >
+                                                Remove
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                <p className="text-[11px] text-gray-500 ml-1">Use a clear face selfie. You can crop before saving.</p>
+                            </div>
+                        </Field>
+
+                        <Field label={t('staff.modal.name_label')} error={errors.name}>
                             <input
                                 type="text"
                                 placeholder={t('staff.modal.name_placeholder')}
                                 value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                className="w-full px-5 py-4 bg-[#F8F9FA] border border-transparent rounded-[16px] text-[15px] focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
+                                onChange={(e) => setField('name', e.target.value)}
+                                className={inputCls(!!errors.name)}
                             />
-                        </div>
+                        </Field>
 
-                        <div className="space-y-2">
-                            <label className="text-[13px] font-semibold text-[#555555] ml-1">{t('staff.modal.phone_label')}</label>
+                        <Field label={t('staff.modal.phone_label')} error={errors.phone}>
                             <input
-                                type="text"
+                                type="tel"
                                 placeholder={t('staff.modal.phone_placeholder')}
                                 value={formData.phone}
-                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                className="w-full px-5 py-4 bg-[#F8F9FA] border border-transparent rounded-[16px] text-[15px] focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
+                                onChange={(e) => {
+                                    // Only allow digits, +, spaces
+                                    const v = e.target.value.replace(/[^\d+\s-]/g, '');
+                                    setField('phone', v);
+                                }}
+                                className={inputCls(!!errors.phone)}
                             />
-                        </div>
+                        </Field>
 
-                        <div className="space-y-2">
-                            <label className="text-[13px] font-semibold text-[#555555] ml-1">{t('staff.modal.role_label')}</label>
+                        <Field label="Email (optional)" error={errors.email}>
+                            <input
+                                type="email"
+                                placeholder="Enter email"
+                                value={formData.email}
+                                onChange={(e) => setField('email', e.target.value)}
+                                className={inputCls(!!errors.email)}
+                            />
+                        </Field>
+
+                        <Field label={t('staff.modal.role_label')} error={errors.role}>
                             <div className="relative">
                                 <select
                                     value={formData.role}
-                                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                    className="w-full px-5 py-4 bg-[#F8F9FA] border border-transparent rounded-[16px] text-[15px] focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 outline-none transition-all appearance-none text-dark"
+                                    onChange={(e) => setField('role', e.target.value)}
+                                    className={`${inputCls(!!errors.role)} appearance-none`}
                                 >
                                     <option value="" disabled>{t('staff.modal.role_placeholder')}</option>
-                                    {roles.map(role => (
-                                        <option key={role} value={role}>{role}</option>
-                                    ))}
+                                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
                                 </select>
                                 <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
-                                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M1 1L6 6L11 1" stroke="#939393" strokeWidth="2" strokeLinecap="round" />
-                                    </svg>
+                                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none"><path d="M1 1L6 6L11 1" stroke="#939393" strokeWidth="2" strokeLinecap="round" /></svg>
                                 </div>
                             </div>
-                        </div>
+                        </Field>
 
+                        {/* Shift Times */}
                         <div className="flex gap-4">
-                            <div className="flex-1 space-y-2">
-                                <label className="text-[13px] font-semibold text-[#555555] ml-1">{t('staff.modal.start_time')}</label>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        placeholder="9:00AM"
-                                        value={formData.startTime}
-                                        onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                                        className="w-full px-5 py-4 bg-[#F8F9FA] border border-transparent rounded-[16px] text-[15px] focus:bg-white focus:border-primary/20 outline-none transition-all pr-12 font-medium"
-                                    />
-                                    <Clock className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                </div>
+                            <div className="flex-1">
+                                <TimePicker
+                                    label={t('staff.modal.start_time')}
+                                    value={formData.startTime}
+                                    onChange={(v) => {
+                                        setField('startTime', v);
+                                        setErrors(prev => ({ ...prev, endTime: '' }));
+                                    }}
+                                    error={errors.startTime}
+                                />
                             </div>
-                            <div className="flex-1 space-y-2">
-                                <label className="text-[13px] font-semibold text-[#555555] ml-1">{t('staff.modal.end_time')}</label>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        placeholder="5:00PM"
-                                        value={formData.endTime}
-                                        onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                                        className="w-full px-5 py-4 bg-[#F8F9FA] border border-transparent rounded-[16px] text-[15px] focus:bg-white focus:border-primary/20 outline-none transition-all pr-12 font-medium"
-                                    />
-                                    <Clock className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                </div>
+                            <div className="flex-1">
+                                <TimePicker
+                                    label={t('staff.modal.end_time')}
+                                    value={formData.endTime}
+                                    onChange={(v) => setField('endTime', v)}
+                                    error={errors.endTime}
+                                />
                             </div>
                         </div>
                     </div>
 
-                    {/* Footer Actions */}
-                    <div className="flex gap-4 mt-10">
-                        <button
-                            onClick={onClose}
-                            className="flex-1 py-4 bg-[#F3F3F3] text-[#555555] font-semibold rounded-[16px] hover:bg-gray-200 transition-all active:scale-[0.98]"
-                        >
+                    {/* Footer */}
+                    <div className="flex gap-4 mt-6 sm:mt-8">
+                        <button onClick={onClose}
+                            className="flex-1 py-3 bg-[#F3F3F3] text-[#555555] text-[14px] font-semibold rounded-[16px] hover:bg-gray-200 transition-all">
                             {t('staff.modal.cancel')}
                         </button>
                         <button
-                            onClick={() => onSave(formData)}
-                            className="flex-1 py-4 bg-primary text-white font-semibold rounded-[16px] hover:bg-primary/95 shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
+                            onClick={handleSubmit}
+                            disabled={submitting}
+                            className="flex-1 py-3 bg-primary text-white text-[14px] font-semibold rounded-[16px] hover:bg-primary/95 shadow-lg shadow-primary/20 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                            {member ? t('staff.modal.save') : t('staff.modal.add')}
+                            {submitting ? 'Saving...' : member ? t('staff.modal.save') : t('staff.modal.add')}
                         </button>
                     </div>
                 </div>
             </div>
+
+            {cropSource && (
+                <div className="absolute inset-0 z-[130] bg-black/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[24px] w-full max-w-[420px] shadow-2xl p-5">
+                        <h3 className="text-[18px] font-bold text-dark mb-2">Crop Selfie</h3>
+                        <p className="text-[12px] text-gray-500 mb-3">Move and zoom to fit face in the circle frame.</p>
+                        <div className="relative w-full h-[280px] rounded-[16px] overflow-hidden bg-[#111827]">
+                            <Cropper
+                                image={cropSource}
+                                crop={crop}
+                                zoom={zoom}
+                                aspect={1}
+                                cropShape="round"
+                                showGrid={false}
+                                onCropChange={setCrop}
+                                onZoomChange={setZoom}
+                                onCropComplete={(_, pixels) => setCropPixels(pixels)}
+                            />
+                        </div>
+                        <div className="mt-4">
+                            <label className="block text-[12px] font-semibold text-[#555] mb-1">Zoom</label>
+                            <input
+                                type="range"
+                                min={1}
+                                max={3}
+                                step={0.01}
+                                value={zoom}
+                                onChange={(e) => setZoom(Number(e.target.value))}
+                                className="w-full"
+                            />
+                        </div>
+                        <div className="flex gap-3 mt-4">
+                            <button
+                                type="button"
+                                onClick={() => setCropSource('')}
+                                className="flex-1 py-3 bg-[#F3F3F3] text-[#555555] font-semibold rounded-[14px] hover:bg-gray-200 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={applyCrop}
+                                className="flex-1 py-3 bg-primary text-white font-semibold rounded-[14px] hover:bg-primary/95 transition-all"
+                            >
+                                Apply Crop
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

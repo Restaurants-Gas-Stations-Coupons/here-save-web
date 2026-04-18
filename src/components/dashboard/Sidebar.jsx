@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LayoutDashboard, Ticket, Users, Fuel, Utensils, ChevronDown } from 'lucide-react';
 
 const ICON_MAP = {
@@ -10,20 +10,26 @@ const ICON_MAP = {
 };
 
 const Sidebar = ({ data, activeNav, onNavChange, activeSubNav, onSubNavChange }) => {
-    // Keep track of which nav items are expanded (for sub-items)
-    const [expandedNavs, setExpandedNavs] = useState([activeNav]);
+    const [expandedNavId, setExpandedNavId] = useState(activeNav);
 
-    const handleNavClick = (itemId, hasSubItems) => {
-        onNavChange(itemId);
-        
-        if (hasSubItems) {
-            setExpandedNavs(prev => 
-                prev.includes(itemId) 
-                    ? prev.filter(id => id !== itemId) 
-                    : [...prev, itemId]
-            );
+    useEffect(() => {
+        // Only sync when active nav changes externally; allow manual collapse to persist.
+        setExpandedNavId(activeNav || null);
+    }, [activeNav]);
+
+    const handleNavClick = (item) => {
+        if (item.subItems) {
+            if (activeNav === item.id) {
+                setExpandedNavId((prev) => (prev === item.id ? null : item.id));
+                return;
+            }
+            onNavChange(item.id);
+            setExpandedNavId(item.id);
+            return;
         }
+        onNavChange(item.id);
     };
+
     return (
         <aside className="w-[220px] min-h-screen bg-white flex flex-col pt-6 pb-8 px-5 shrink-0 border-r border-gray-100">
             {/* Logo */}
@@ -52,7 +58,7 @@ const Sidebar = ({ data, activeNav, onNavChange, activeSubNav, onSubNavChange })
                     return (
                         <div key={item.id} className="flex flex-col">
                             <button
-                                onClick={() => handleNavClick(item.id, !!item.subItems)}
+                                onClick={() => handleNavClick(item)}
                                 className={`flex items-center gap-2 px-3 py-2 rounded-[10px] text-[13px] font-semibold transition-colors text-left w-full ${isActive
                                     ? 'text-primary'
                                     : 'text-[#939393] hover:text-dark'
@@ -62,13 +68,16 @@ const Sidebar = ({ data, activeNav, onNavChange, activeSubNav, onSubNavChange })
                                 <span className="whitespace-nowrap">{item.label}</span>
                                 {item.subItems && (
                                     <span className="ml-auto opacity-50 shrink-0">
-                                        <ChevronDown size={14} className={expandedNavs.includes(item.id) ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                                        <ChevronDown
+                                            size={14}
+                                            className={expandedNavId === item.id ? 'rotate-180 transition-transform' : 'transition-transform'}
+                                        />
                                     </span>
                                 )}
                             </button>
 
                             {/* Sub Items Tree View */}
-                            {expandedNavs.includes(item.id) && item.subItems && (
+                            {isActive && expandedNavId === item.id && item.subItems && (
                                 <div className="mt-1 flex flex-col relative pl-[22px] ml-3 border-l border-[#E5E5E5] pb-2">
                                     {item.subItems.map((subItem, index) => {
                                         const isSubActive = isActive && activeSubNav === subItem.id;
